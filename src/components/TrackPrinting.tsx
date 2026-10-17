@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PrintJob, User } from '../types';
 import { soundManager } from '../utils/audio';
+import { getRecentSessionJobIds } from '../services/storage';
 import {
   Clock,
   Printer,
@@ -147,22 +148,37 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [readyAlertMsg, setReadyAlertMsg] = useState<string | null>(null);
 
-  // Student should see their own jobs matching their ID, Roll number, or Email
+  // Student should see their own jobs matching their ID, Roll number, Email, or submitted from this device/session
+  const recentJobIds = React.useMemo(() => new Set(getRecentSessionJobIds()), [jobs]);
+
   const studentJobs = jobs.filter((j) => {
+    // 1. If placed during this session on this device, always display it!
+    if (recentJobIds.has(j.id)) return true;
+
     if (!user) return false;
     const userRoll = (user.studentId || '').trim().toLowerCase();
     const jobRoll = (j.studentRoll || '').trim().toLowerCase();
     const userId = (user.id || '').trim().toLowerCase();
     const jobStudentId = (j.studentId || '').trim().toLowerCase();
     const userEmail = (user.email || '').trim().toLowerCase();
+    const userName = (user.name || '').trim().toLowerCase();
+    const jobName = (j.studentName || '').trim().toLowerCase();
 
     return (
       (userRoll && jobRoll && userRoll === jobRoll) ||
       (userId && jobStudentId && userId === jobStudentId) ||
       (userRoll && jobStudentId && userRoll === jobStudentId) ||
-      (userEmail && jobRoll && userEmail === jobRoll)
+      (userEmail && jobRoll && userEmail === jobRoll) ||
+      (userName && jobName && userName === jobName)
     );
   });
+
+  // Auto-expand the most recent order so user immediately sees live status & barcode
+  useEffect(() => {
+    if (!expandedJobId && studentJobs.length > 0) {
+      setExpandedJobId(studentJobs[0].id);
+    }
+  }, [studentJobs, expandedJobId]);
 
   // Sound chime when operator marks an order as ready
   const knownReadyRef = useRef<Set<string>>(

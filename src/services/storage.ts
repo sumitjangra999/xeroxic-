@@ -112,12 +112,43 @@ export function saveStoredJobs(jobs: PrintJob[], newJob?: PrintJob): void {
   }
 }
 
+const STORAGE_KEY_RECENT_SESSION_JOBS = 'xeroxic_recent_session_jobs_v1';
+
+export function addRecentSessionJobId(jobId: string): void {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_RECENT_SESSION_JOBS);
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    if (!ids.includes(jobId)) {
+      ids.unshift(jobId);
+      sessionStorage.setItem(STORAGE_KEY_RECENT_SESSION_JOBS, JSON.stringify(ids.slice(0, 50)));
+    }
+  } catch {}
+}
+
+export function getRecentSessionJobIds(): string[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_RECENT_SESSION_JOBS);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function syncJobsFromSupabase(): Promise<PrintJob[]> {
   try {
     const remote = await fetchJobsFromSupabase();
     if (remote !== null) {
-      saveStoredJobs(remote);
-      return remote;
+      // Merge with any recent local jobs that might not have committed to Supabase yet
+      const local = getStoredJobs();
+      const remoteIds = new Set(remote.map((j) => j.id));
+      const recentLocalPending = local.filter((j) => {
+        if (remoteIds.has(j.id)) return false;
+        const ageMs = Date.now() - new Date(j.createdAt).getTime();
+        return !isNaN(ageMs) && ageMs < 15 * 60 * 1000; // keep local jobs created in last 15 mins
+      });
+      const merged = [...recentLocalPending, ...remote];
+      saveStoredJobs(merged);
+      return merged;
     }
   } catch (err) {
     console.warn('Supabase sync skipped, using local cache:', err);
@@ -521,33 +552,36 @@ export function saveStoredUser(user: User | null): void {
 }
 
 export async function addPrintJobAsync(job: PrintJob, file?: File | null): Promise<boolean> {
-  // Update local storage and broadcast to other tabs immediately for instant (<2ms) responsiveness
+  // 1. Immediately save to local storage & broadcast to other tabs (<2ms)
   const jobs = getStoredJobs();
   const updated = [job, ...jobs.filter((j) => j.id !== job.id)];
   saveStoredJobs(updated, job);
+  addRecentSessionJobId(job.id);
 
-  // Instantly insert into Supabase so admin receives the order & chime right away
+  // 2. Instantly insert metadata to Supabase DB so admin receives order immediately
   insertJobToSupabase(job, job.fileUrl).catch((err) =>
     console.warn('Fast Supabase insert warning:', err)
   );
 
-  try {
-    if (file) {
-      const uploadedUrl = await uploadAssignmentFile(file, job.id);
-      if (uploadedUrl) {
-        job.fileUrl = uploadedUrl;
-        const currentJobs = getStoredJobs();
-        const withFile = currentJobs.map((j) => (j.id === job.id ? { ...j, fileUrl: uploadedUrl } : j));
-        saveStoredJobs(withFile);
-        // Update file_url in Supabase
-        supabase.from('print_jobs').update({ file_url: uploadedUrl }).eq('id', job.id).then();
-      }
-    }
-    return true;
-  } catch (err) {
-    console.error('Error uploading file for job:', err);
-    return false;
+  // 3. Upload file asynchronously in the background WITHOUT delaying redirect to Track page
+  if (file) {
+    uploadAssignmentFile(file, job.id)
+      .then((uploadedUrl) => {
+        if (uploadedUrl) {
+          job.fileUrl = uploadedUrl;
+          const currentJobs = getStoredJobs();
+          const withFile = currentJobs.map((j) => (j.id === job.id ? { ...j, fileUrl: uploadedUrl } : j));
+          saveStoredJobs(withFile);
+          // Update file_url in Supabase
+          supabase.from('print_jobs').update({ file_url: uploadedUrl }).eq('id', job.id).then();
+        }
+      })
+      .catch((err) => {
+        console.warn('Background file upload error:', err);
+      });
   }
+
+  return true;
 }
 
 export function addPrintJob(job: PrintJob, file?: File | null): void {

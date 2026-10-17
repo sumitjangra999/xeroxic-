@@ -423,10 +423,25 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
           ],
         };
 
-        // ONLY AFTER SUCCESSFUL PAYMENT: Send to admin queue!
-        await addPrintJobAsync(newJob, mergedFile);
+        // ONLY AFTER SUCCESSFUL PAYMENT: Send to admin queue & redirect immediately to Track page!
+        try {
+          await addPrintJobAsync(newJob, mergedFile);
+        } catch (storageErr) {
+          console.warn('Fast storage notice:', storageErr);
+        }
+
+        // Navigate immediately to Track Printing tab
         onJobCreated(newJob);
-        setSuccessJob(newJob);
+
+        // Reset upload form for future submissions
+        setFileList([]);
+        setMergedFile(null);
+        setFileName('');
+        setFileSize('');
+        setPageCount(1);
+        setCustomRange('');
+        setCurrentStep('upload');
+        setSuccessJob(null);
       } catch (err: any) {
         console.warn('Razorpay checkout error / closed:', err);
         if (err?.message === 'PAYMENT_DISMISSED') {
@@ -483,13 +498,18 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
 
     try {
       await addPrintJobAsync(newJob, mergedFile);
-      onJobCreated(newJob);
-      setSuccessJob(newJob);
     } catch (err) {
       console.error('Failed to submit print job:', err);
-      onJobCreated(newJob);
-      setSuccessJob(newJob);
     } finally {
+      onJobCreated(newJob);
+      setFileList([]);
+      setMergedFile(null);
+      setFileName('');
+      setFileSize('');
+      setPageCount(1);
+      setCustomRange('');
+      setCurrentStep('upload');
+      setSuccessJob(null);
       setIsSubmitting(false);
     }
   };

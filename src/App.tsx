@@ -152,11 +152,25 @@ export function App() {
     setJobs(refreshed);
   };
 
-  const handleJobCreated = async (newJob: PrintJob) => {
+  const handleJobCreated = (newJob: PrintJob) => {
+    // 1. Immediately update React state with newJob
     setJobs((prev) => [newJob, ...prev.filter((j) => j.id !== newJob.id)]);
-    handleTabChange('track');
-    const refreshed = await syncJobsFromSupabase();
-    setJobs(refreshed);
+    // 2. Instantly switch to track tab without delay
+    setActiveTab('track');
+    setIsTransitioning(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // 3. Sync from Supabase in background, preserving newJob
+    syncJobsFromSupabase().then((refreshed) => {
+      if (refreshed && refreshed.length > 0) {
+        setJobs((prev) => {
+          const ids = new Set(refreshed.map((j) => j.id));
+          if (!ids.has(newJob.id)) {
+            return [newJob, ...refreshed];
+          }
+          return refreshed;
+        });
+      }
+    });
   };
 
   const handleOpenPortal = () => {
