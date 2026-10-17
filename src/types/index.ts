@@ -33,6 +33,7 @@ export interface PrintJob {
   paymentMethod?: 'upi' | 'counter';
   utrNumber?: string;
   pageCount: number;
+  pageRange?: string;
   copies: number;
   colorMode: 'bw' | 'color';
   paperSize: 'A4' | 'A3' | 'Letter';

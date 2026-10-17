@@ -20,11 +20,28 @@ export const DEMO_ADMIN: User = {
   phone: '+91 98765 00001',
 };
 
+const STORAGE_KEY_ORDER_COUNTER = 'xeroxic_order_sequence_counter_v1';
+
+export function getNextSequentialOrderId(): string {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ORDER_COUNTER);
+    let count = raw ? parseInt(raw, 10) : 0;
+    count += 1;
+    localStorage.setItem(STORAGE_KEY_ORDER_COUNTER, count.toString());
+
+    // 1 -> A001, 100 -> A100, 999 -> A999, 1000 -> B001, etc.
+    const letterIdx = Math.floor((count - 1) / 999);
+    const letter = String.fromCharCode(65 + (letterIdx % 26));
+    const num = ((count - 1) % 999) + 1;
+    const padded = num.toString().padStart(3, '0');
+    return `${letter}${padded}`;
+  } catch {
+    return 'A001';
+  }
+}
+
 export function generateOrderId(): string {
-  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const letter = letters[Math.floor(Math.random() * letters.length)];
-  const num = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-  return `${letter}${num}`;
+  return getNextSequentialOrderId();
 }
 
 const INITIAL_JOBS: PrintJob[] = [];

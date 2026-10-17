@@ -85,6 +85,21 @@ export function App() {
     };
   }, []);
 
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  const handleTabChange = (nextTab: string) => {
+    let target = nextTab;
+    if (currentUser?.role === 'admin' && (target === 'home' || target === 'upload')) {
+      target = 'queue';
+    }
+    if (target === activeTab) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveTab(target);
+      setIsTransitioning(false);
+    }, 160);
+  };
+
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     saveStoredUser(user);
@@ -109,13 +124,13 @@ export function App() {
 
   const handleJobCreated = async (newJob: PrintJob) => {
     setJobs((prev) => [newJob, ...prev.filter((j) => j.id !== newJob.id)]);
-    setActiveTab('track');
+    handleTabChange('track');
     const refreshed = await syncJobsFromSupabase();
     setJobs(refreshed);
   };
 
   const handleOpenPortal = () => {
-    setActiveTab('upload');
+    handleTabChange('upload');
   };
 
   // Require user to sign in or create an account before accessing the app
@@ -142,54 +157,65 @@ export function App() {
         <Navbar
           user={currentUser}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           onOpenSignIn={() => setShowSignInModal(true)}
           onLogout={handleLogout}
         />
 
         <main className="pb-12">
-          {activeTab === 'home' && (
-            <HomeView
-              onOpenPortal={handleOpenPortal}
-              onOpenRates={() => setActiveTab('rates')}
-              onOpenTracking={() => {
-                if (!currentUser) {
-                  setCurrentUser(DEMO_STUDENT);
-                  saveStoredUser(DEMO_STUDENT);
-                }
-                setActiveTab('track');
-              }}
-              onOpenSignIn={() => setShowSignInModal(true)}
-            />
+          {isTransitioning ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3.5 animate-fadeIn">
+              <div className="w-9 h-9 border-[3px] border-[#0067b8]/20 border-t-[#0067b8] rounded-full animate-spin" />
+              <div className="text-xs font-semibold text-[#605e5c] tracking-wide">
+                Loading workspace...
+              </div>
+            </div>
+          ) : (
+            <div className="animate-fadeIn">
+              {activeTab === 'home' && currentUser?.role !== 'admin' && (
+                <HomeView
+                  onOpenPortal={handleOpenPortal}
+                  onOpenRates={() => handleTabChange('rates')}
+                  onOpenTracking={() => {
+                    if (!currentUser) {
+                      setCurrentUser(DEMO_STUDENT);
+                      saveStoredUser(DEMO_STUDENT);
+                    }
+                    handleTabChange('track');
+                  }}
+                  onOpenSignIn={() => setShowSignInModal(true)}
+                />
+              )}
+
+              {activeTab === 'upload' && (
+                <UploadAssignment
+                  user={currentUser || DEMO_STUDENT}
+                  onJobCreated={handleJobCreated}
+                />
+              )}
+
+              {activeTab === 'track' && (
+                <TrackPrinting
+                  user={currentUser || DEMO_STUDENT}
+                  jobs={jobs}
+                  onRefresh={handleRefreshJobs}
+                  onNavigateToUpload={() => handleTabChange('upload')}
+                />
+              )}
+
+              {activeTab === 'rates' && <RateCard />}
+
+              {(activeTab === 'queue' || (currentUser?.role === 'admin' && activeTab === 'home')) && (
+                <AdminQueue
+                  user={currentUser || DEMO_STUDENT}
+                  jobs={jobs}
+                  onRefresh={handleRefreshJobs}
+                />
+              )}
+
+              {activeTab === 'history' && <AdminHistory jobs={jobs} />}
+            </div>
           )}
-
-          {activeTab === 'upload' && (
-            <UploadAssignment
-              user={currentUser || DEMO_STUDENT}
-              onJobCreated={handleJobCreated}
-            />
-          )}
-
-          {activeTab === 'track' && (
-            <TrackPrinting
-              user={currentUser || DEMO_STUDENT}
-              jobs={jobs}
-              onRefresh={handleRefreshJobs}
-              onNavigateToUpload={() => setActiveTab('upload')}
-            />
-          )}
-
-          {activeTab === 'rates' && <RateCard />}
-
-          {activeTab === 'queue' && (
-            <AdminQueue
-              user={currentUser || DEMO_STUDENT}
-              jobs={jobs}
-              onRefresh={handleRefreshJobs}
-            />
-          )}
-
-          {activeTab === 'history' && <AdminHistory jobs={jobs} />}
         </main>
       </div>
 

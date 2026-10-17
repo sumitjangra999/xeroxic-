@@ -52,9 +52,81 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState('');
   const [pageCount, setPageCount] = useState<number>(1);
+  const [totalDocPages, setTotalDocPages] = useState<number>(1);
+  const [pageRangeMode, setPageRangeMode] = useState<'all' | 'custom'>('all');
+  const [customRange, setCustomRange] = useState<string>('');
   const [isMerging, setIsMerging] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+
+  // Helper to parse page range (e.g. "1-4, 7, 9-11")
+  const parsePageRangeList = (rangeStr: string, maxPages: number): number[] => {
+    if (!rangeStr.trim()) return [];
+    const pages = new Set<number>();
+    const parts = rangeStr.split(/[,;\s]+/);
+
+    for (const part of parts) {
+      if (!part) continue;
+      if (part.includes('-')) {
+        const [startStr, endStr] = part.split('-');
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        if (!isNaN(start) && !isNaN(end)) {
+          const min = Math.max(1, Math.min(start, end));
+          const max = Math.min(maxPages, Math.max(start, end));
+          for (let p = min; p <= max; p++) {
+            pages.add(p);
+          }
+        }
+      } else {
+        const pageNum = parseInt(part, 10);
+        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= maxPages) {
+          pages.add(pageNum);
+        }
+      }
+    }
+    return Array.from(pages).sort((a, b) => a - b);
+  };
+
+  const handleRangeModeChange = (mode: 'all' | 'custom') => {
+    setPageRangeMode(mode);
+    if (mode === 'all') {
+      setPageCount(totalDocPages);
+    } else {
+      const activeStr = customRange.trim() || `1-${totalDocPages}`;
+      setCustomRange(activeStr);
+      const parsed = parsePageRangeList(activeStr, totalDocPages);
+      setPageCount(parsed.length > 0 ? parsed.length : 1);
+    }
+  };
+
+  const handleCustomRangeInput = (val: string) => {
+    setCustomRange(val);
+    const parsed = parsePageRangeList(val, totalDocPages);
+    if (parsed.length > 0) {
+      setPageCount(parsed.length);
+    }
+  };
+
+  const applyRangePreset = (preset: 'odd' | 'even' | 'first' | 'all') => {
+    let str = '';
+    if (preset === 'all') {
+      str = `1-${totalDocPages}`;
+    } else if (preset === 'first') {
+      str = '1';
+    } else if (preset === 'odd') {
+      const odds: number[] = [];
+      for (let i = 1; i <= totalDocPages; i += 2) odds.push(i);
+      str = odds.join(', ');
+    } else if (preset === 'even') {
+      const evens: number[] = [];
+      for (let i = 2; i <= totalDocPages; i += 2) evens.push(i);
+      str = evens.join(', ');
+    }
+    setCustomRange(str);
+    const parsed = parsePageRangeList(str, totalDocPages);
+    setPageCount(parsed.length > 0 ? parsed.length : 1);
+  };
 
   // Print configuration state (No binding options)
   const [colorMode, setColorMode] = useState<'bw' | 'color'>('bw');
@@ -90,6 +162,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
       setFileName('');
       setFileSize('');
       setPageCount(1);
+      setTotalDocPages(1);
       setMergeError(null);
       setIsMerging(false);
       return;
@@ -104,7 +177,13 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
       setMergedFile(result.mergedFile);
       setFileName(result.mergedFile.name);
       setFileSize(result.fileSizeFormatted);
-      setPageCount(result.pageCount);
+      setTotalDocPages(result.pageCount);
+      if (pageRangeMode === 'all') {
+        setPageCount(result.pageCount);
+      } else {
+        const parsed = parsePageRangeList(customRange, result.pageCount);
+        setPageCount(parsed.length > 0 ? parsed.length : result.pageCount);
+      }
     } catch (err: any) {
       console.error('Merge error:', err);
       setMergeError(err.message || 'Failed to merge files into a PDF.');
@@ -287,6 +366,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
       fileSize: fileSize || '1.5 MB',
       fileType: 'application/pdf',
       pageCount: pageCount,
+      pageRange: pageRangeMode === 'all' ? 'All Pages' : customRange.trim() || 'All Pages',
       copies: copies,
       colorMode: colorMode,
       paperSize: paperSize,
@@ -295,7 +375,9 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
       sides: sides,
       binding: 'none',
       isUrgent: isUrgent,
-      instructions: instructions.trim(),
+      instructions: pageRangeMode === 'custom' && customRange.trim()
+        ? `[Pages to print: ${customRange.trim()}] ${instructions.trim()}`
+        : instructions.trim(),
       cost: totalCost,
       status: 'submitted',
       paymentMethod: paymentMethod,
@@ -896,28 +978,125 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                 <h2 className="text-sm font-semibold text-[#242424]">Print Specifications</h2>
               </div>
 
-              {/* Number of Pages to Print (Actual page count from merged PDF) */}
-              <div className="p-3 bg-[#faf9f8] border border-[#edebe9] rounded-md flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center space-x-2 text-[#242424]">
-                  <Info className="w-4 h-4 text-[#0067b8]" />
-                  <div>
-                    <span className="font-semibold">Actual Merged Page Count:</span>
-                    <span className="text-[#605e5c] text-[11px] block">
-                      Calculated directly from the merged PDF ({pageCount} {pageCount === 1 ? 'page' : 'pages'})
+              {/* Pages to Print Option (All Pages vs Custom Page Range) */}
+              <div className="p-4 bg-[#faf9f8] border border-[#edebe9] rounded-xl space-y-3 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-[#edebe9]">
+                  <div className="flex items-center space-x-2 text-[#242424]">
+                    <FileText className="w-4 h-4 text-[#0067b8]" />
+                    <span className="font-semibold text-sm">Select Pages to Print</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="text-[#605e5c]">Total Document Pages:</span>
+                    <span className="font-bold text-[#0067b8] px-2 py-0.5 bg-[#e6f2fb] rounded-md border border-[#cbe4f9]">
+                      {totalDocPages} {totalDocPages === 1 ? 'page' : 'pages'}
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max={MAX_PAGE_COUNT}
-                    value={pageCount}
-                    onChange={(e) => setPageCount(Math.max(1, Math.min(MAX_PAGE_COUNT, parseInt(e.target.value) || 1)))}
-                    className="w-20 px-2 py-1.5 border border-[#8a8886] rounded text-sm text-center font-semibold focus:outline-none focus:border-[#0067b8] bg-white"
-                  />
-                  <span className="text-[#605e5c] font-medium">pages</span>
+
+                {/* Range Toggle: All Pages vs Specific Pages */}
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleRangeModeChange('all')}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      pageRangeMode === 'all'
+                        ? 'border-[#0067b8] bg-[#e6f2fb]/60 text-[#0067b8] font-semibold ring-1 ring-[#0067b8]'
+                        : 'border-[#edebe9] bg-white text-[#605e5c] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs flex items-center justify-between">
+                      <span>Print All Pages</span>
+                      {pageRangeMode === 'all' && <Check className="w-3.5 h-3.5 text-[#0067b8]" />}
+                    </div>
+                    <div className="text-[11px] text-[#605e5c] mt-0.5">
+                      Pages 1 to {totalDocPages} ({totalDocPages} pages)
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRangeModeChange('custom')}
+                    className={`p-3 rounded-lg border text-left transition-all ${
+                      pageRangeMode === 'custom'
+                        ? 'border-[#0067b8] bg-[#e6f2fb]/60 text-[#0067b8] font-semibold ring-1 ring-[#0067b8]'
+                        : 'border-[#edebe9] bg-white text-[#605e5c] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    <div className="font-semibold text-xs flex items-center justify-between">
+                      <span>Specific Pages / Range</span>
+                      {pageRangeMode === 'custom' && <Check className="w-3.5 h-3.5 text-[#0067b8]" />}
+                    </div>
+                    <div className="text-[11px] text-[#605e5c] mt-0.5">
+                      e.g. 1-3, 5, 8 (Select custom)
+                    </div>
+                  </button>
                 </div>
+
+                {/* Custom Range Input & Presets */}
+                {pageRangeMode === 'custom' ? (
+                  <div className="pt-2 space-y-2 animate-fadeIn">
+                    <label className="block text-[11px] font-semibold text-[#242424]">
+                      Enter Page Numbers / Range (separated by commas or hyphens):
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        placeholder="e.g. 1-4, 7, 9-11"
+                        value={customRange}
+                        onChange={(e) => handleCustomRangeInput(e.target.value)}
+                        className="flex-1 px-3 py-2 border border-[#8a8886] rounded-lg text-xs font-semibold focus:outline-none focus:border-[#0067b8] bg-white shadow-xs"
+                      />
+                      <div className="text-xs bg-[#e6f2fb] text-[#0067b8] px-3 py-2 rounded-lg font-bold border border-[#cbe4f9] whitespace-nowrap shadow-xs">
+                        {pageCount} {pageCount === 1 ? 'page' : 'pages'} to print
+                      </div>
+                    </div>
+
+                    {/* Quick Preset Buttons */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] text-[#605e5c] mr-1">Quick Presets:</span>
+                      <button
+                        type="button"
+                        onClick={() => applyRangePreset('first')}
+                        className="px-2.5 py-1 text-[11px] bg-white border border-[#c8c6c4] hover:border-[#0067b8] hover:text-[#0067b8] rounded-md transition-colors font-medium shadow-xs"
+                      >
+                        First Page Only
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRangePreset('odd')}
+                        className="px-2.5 py-1 text-[11px] bg-white border border-[#c8c6c4] hover:border-[#0067b8] hover:text-[#0067b8] rounded-md transition-colors font-medium shadow-xs"
+                      >
+                        Odd Pages
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRangePreset('even')}
+                        className="px-2.5 py-1 text-[11px] bg-white border border-[#c8c6c4] hover:border-[#0067b8] hover:text-[#0067b8] rounded-md transition-colors font-medium shadow-xs"
+                      >
+                        Even Pages
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyRangePreset('all')}
+                        className="px-2.5 py-1 text-[11px] bg-white border border-[#c8c6c4] hover:border-[#0067b8] hover:text-[#0067b8] rounded-md transition-colors font-medium shadow-xs"
+                      >
+                        All Pages
+                      </button>
+                    </div>
+
+                    <div className="text-[11px] text-[#107c10] font-medium flex items-center space-x-1.5 pt-0.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#107c10] shrink-0" />
+                      <span>
+                        Operator will print pages: <strong className="font-mono">{parsePageRangeList(customRange, totalDocPages).join(', ') || 'No valid pages'}</strong> ({pageCount} pages total)
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-[#605e5c] flex items-center space-x-1.5 pt-0.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#107c10] shrink-0" />
+                    <span>Entire document will be printed ({totalDocPages} {totalDocPages === 1 ? 'page' : 'pages'})</span>
+                  </div>
+                )}
               </div>
 
               {/* Color Mode */}

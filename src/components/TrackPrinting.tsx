@@ -16,8 +16,117 @@ import {
   Check,
   Bell,
   ExternalLink,
-  Download
+  Download,
+  QrCode,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
+
+export const BarcodeSVG: React.FC<{ code: string; className?: string }> = ({ code, className = '' }) => {
+  const bars = React.useMemo(() => {
+    const raw = `*${code.trim().toUpperCase()}*`;
+    const patterns: Record<string, string> = {
+      '0': '101001101', '1': '110100101', '2': '101100101', '3': '110110010',
+      '4': '101011001', '5': '110101100', '6': '101101100', '7': '101001011',
+      '8': '110100101', '9': '101100101',
+      'A': '110101001', 'B': '101101001', 'C': '110110100', 'D': '101011001',
+      'E': '110101100', 'F': '101101100', 'G': '101001101', 'H': '110100110',
+      'I': '101100110', 'J': '101011010', 'K': '110101010', 'L': '101101010',
+      'M': '110110101', 'N': '101011011', 'O': '110101101', 'P': '101101101',
+      'Q': '101001011', 'R': '110100101', 'S': '101100101', 'T': '101011001',
+      'U': '110010101', 'V': '100110101', 'W': '110011010', 'X': '100101101',
+      'Y': '110010110', 'Z': '100110110', '*': '100101101'
+    };
+
+    const elements: { isBar: boolean; width: number }[] = [];
+    for (const char of raw) {
+      const bitStr = patterns[char] || patterns['*'];
+      for (let i = 0; i < bitStr.length; i++) {
+        const isBar = i % 2 === 0;
+        const isWide = bitStr[i] === '1';
+        elements.push({ isBar, width: isWide ? 2.6 : 1.2 });
+      }
+      elements.push({ isBar: false, width: 1.4 });
+    }
+    return elements;
+  }, [code]);
+
+  let currentX = 8;
+  const rects: React.ReactNode[] = [];
+  bars.forEach((b, idx) => {
+    if (b.isBar) {
+      rects.push(
+        <rect
+          key={idx}
+          x={currentX}
+          y={2}
+          width={b.width}
+          height={44}
+          fill="#111827"
+        />
+      );
+    }
+    currentX += b.width;
+  });
+
+  const totalWidth = currentX + 8;
+
+  return (
+    <div className={`flex flex-col items-center select-all ${className}`}>
+      <svg
+        width={Math.min(totalWidth, 230)}
+        height={48}
+        viewBox={`0 0 ${totalWidth} 48`}
+        className="h-10 w-auto max-w-full"
+      >
+        {rects}
+      </svg>
+      <div className="font-mono text-xs tracking-[0.28em] font-extrabold text-[#111827] mt-1 text-center">
+        * {code.trim().toUpperCase()} *
+      </div>
+    </div>
+  );
+};
+
+export const QRCodeSVG: React.FC<{ code: string }> = ({ code }) => {
+  return (
+    <div className="flex flex-col items-center justify-center p-2 bg-white rounded-lg border border-gray-200">
+      <svg width="60" height="60" viewBox="0 0 68 68" className="w-14 h-14">
+        <rect width="68" height="68" fill="#ffffff" />
+        <rect x="4" y="4" width="20" height="20" fill="#111827" rx="3" />
+        <rect x="7" y="7" width="14" height="14" fill="#ffffff" rx="2" />
+        <rect x="10" y="10" width="8" height="8" fill="#111827" rx="1.5" />
+        <rect x="44" y="4" width="20" height="20" fill="#111827" rx="3" />
+        <rect x="47" y="7" width="14" height="14" fill="#ffffff" rx="2" />
+        <rect x="50" y="10" width="8" height="8" fill="#111827" rx="1.5" />
+        <rect x="4" y="44" width="20" height="20" fill="#111827" rx="3" />
+        <rect x="7" y="47" width="14" height="14" fill="#ffffff" rx="2" />
+        <rect x="10" y="50" width="8" height="8" fill="#111827" rx="1.5" />
+        <rect x="28" y="8" width="4" height="4" fill="#111827" />
+        <rect x="36" y="8" width="4" height="4" fill="#111827" />
+        <rect x="28" y="16" width="4" height="4" fill="#111827" />
+        <rect x="36" y="20" width="4" height="4" fill="#111827" />
+        <rect x="8" y="28" width="4" height="4" fill="#111827" />
+        <rect x="16" y="28" width="4" height="4" fill="#111827" />
+        <rect x="24" y="28" width="4" height="4" fill="#111827" />
+        <rect x="32" y="28" width="4" height="4" fill="#111827" />
+        <rect x="40" y="28" width="4" height="4" fill="#111827" />
+        <rect x="48" y="28" width="4" height="4" fill="#111827" />
+        <rect x="56" y="28" width="4" height="4" fill="#111827" />
+        <rect x="28" y="36" width="4" height="4" fill="#111827" />
+        <rect x="36" y="36" width="4" height="4" fill="#111827" />
+        <rect x="48" y="36" width="4" height="4" fill="#111827" />
+        <rect x="28" y="44" width="4" height="4" fill="#111827" />
+        <rect x="40" y="48" width="4" height="4" fill="#111827" />
+        <rect x="52" y="48" width="4" height="4" fill="#111827" />
+        <rect x="32" y="56" width="4" height="4" fill="#111827" />
+        <rect x="44" y="56" width="4" height="4" fill="#111827" />
+        <rect x="56" y="56" width="4" height="4" fill="#111827" />
+      </svg>
+      <span className="text-[9px] font-mono font-bold text-gray-700 mt-0.5">{code}</span>
+    </div>
+  );
+};
 
 interface TrackPrintingProps {
   user: User;
@@ -98,28 +207,28 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
     switch (status) {
       case 'submitted':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-[2px] text-xs font-semibold bg-[#e6f2fb] text-[#0067b8] border border-[#cbe4f9]">
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#e6f2fb] text-[#0067b8] border border-[#cbe4f9]">
             <Clock className="w-3.5 h-3.5" />
             <span>Queued</span>
           </span>
         );
       case 'processing':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-[2px] text-xs font-semibold bg-[#fff4ce] text-[#797673] border border-[#f2c80f]">
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[#fff4ce] text-[#797673] border border-[#f2c80f]">
             <Printer className="w-3.5 h-3.5 text-[#0067b8] animate-pulse" />
             <span className="text-[#323130]">Printing in Progress</span>
           </span>
         );
       case 'ready':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-[2px] text-xs font-semibold bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0]">
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] shadow-sm">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Ready for Pickup</span>
           </span>
         );
       case 'completed':
         return (
-          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-[2px] text-xs font-medium bg-[#f3f2f1] text-[#605e5c] border border-[#d2d0ce]">
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[#f3f2f1] text-[#605e5c] border border-[#d2d0ce]">
             <PackageCheck className="w-3.5 h-3.5" />
             <span>Collected</span>
           </span>
@@ -160,14 +269,14 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
         <div className="flex items-center space-x-2">
           <button
             onClick={onRefresh}
-            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#242424] border border-[#8a8886] px-3 py-1.5 rounded-[2px] font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#242424] border border-[#8a8886] px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
           >
             <RefreshCw className="w-3.5 h-3.5 text-[#0067b8]" />
             <span>Refresh Status</span>
           </button>
           <button
             onClick={onNavigateToUpload}
-            className="text-xs bg-[#0067b8] hover:bg-[#005da6] text-white px-3.5 py-1.5 rounded-[2px] font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+            className="text-xs bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
           >
             <span>+ New Print Order</span>
           </button>
@@ -176,7 +285,7 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
 
       {/* Live Ready Alert Banner */}
       {readyAlertMsg && (
-        <div className="mb-4 p-4 bg-[#dff6dd] text-[#107c10] border-2 border-[#107c10] rounded-[4px] text-xs font-semibold flex items-center justify-between shadow animate-bounce">
+        <div className="mb-5 p-4 bg-gradient-to-r from-emerald-50 to-green-100 text-[#107c10] border-2 border-[#107c10] rounded-xl text-xs font-semibold flex items-center justify-between shadow-md animate-bounce">
           <div className="flex items-center space-x-2.5">
             <Bell className="w-5 h-5 text-[#107c10] shrink-0" />
             <span className="text-sm">{readyAlertMsg}</span>
@@ -192,37 +301,37 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
 
       {/* Quick Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Total Orders</div>
-          <div className="text-xl font-bold text-[#242424] mt-0.5">{studentJobs.length}</div>
+          <div className="text-2xl font-bold text-[#242424] mt-0.5">{studentJobs.length}</div>
         </div>
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">In Queue</div>
-          <div className="text-xl font-bold text-[#0067b8] mt-0.5">
+          <div className="text-2xl font-bold text-[#0067b8] mt-0.5">
             {studentJobs.filter((j) => j.status === 'submitted').length}
           </div>
         </div>
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Printing Now</div>
-          <div className="text-xl font-bold text-[#d83b01] mt-0.5">
+          <div className="text-2xl font-bold text-[#d83b01] mt-0.5">
             {studentJobs.filter((j) => j.status === 'processing').length}
           </div>
         </div>
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Ready at Counter</div>
-          <div className="text-xl font-bold text-[#107c10] mt-0.5">
+          <div className="text-2xl font-bold text-[#107c10] mt-0.5">
             {studentJobs.filter((j) => j.status === 'ready').length}
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-white border border-[#e1dfdd] p-3 rounded-[2px] mb-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+      <div className="bg-white border border-[#e1dfdd] p-3 rounded-xl mb-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
         {/* Filter Tabs */}
-        <div className="flex space-x-1 overflow-x-auto w-full md:w-auto">
+        <div className="flex space-x-1.5 overflow-x-auto w-full md:w-auto">
           <button
             onClick={() => setFilter('all')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'all'
                 ? 'bg-[#0067b8] text-white font-semibold'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
@@ -232,7 +341,7 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
           </button>
           <button
             onClick={() => setFilter('active')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'active'
                 ? 'bg-[#0067b8] text-white font-semibold'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
@@ -244,9 +353,9 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
           </button>
           <button
             onClick={() => setFilter('ready')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'ready'
-                ? 'bg-[#107c10] text-white font-semibold'
+                ? 'bg-[#107c10] text-white font-semibold shadow-sm'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
             }`}
           >
@@ -254,7 +363,7 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
           </button>
           <button
             onClick={() => setFilter('completed')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'completed'
                 ? 'bg-[#0067b8] text-white font-semibold'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
@@ -265,21 +374,21 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
         </div>
 
         {/* Search */}
-        <div className="relative w-full md:w-64">
-          <Search className="w-3.5 h-3.5 text-[#797775] absolute left-2.5 top-1/2 -translate-y-1/2" />
+        <div className="relative w-full md:w-72">
+          <Search className="w-3.5 h-3.5 text-[#797775] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by Token ID or File..."
+            placeholder="Search by Order ID (e.g. A001)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
           />
         </div>
       </div>
 
       {/* Orders List */}
       {filteredJobs.length === 0 ? (
-        <div className="bg-white border border-[#e1dfdd] rounded-[2px] p-12 text-center shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] rounded-xl p-12 text-center shadow-sm">
           <FileText className="w-10 h-10 text-[#a19f9d] mx-auto mb-3" />
           <h3 className="text-sm font-semibold text-[#242424]">No print jobs found</h3>
           <p className="text-xs text-[#605e5c] mt-1 mb-4">
@@ -289,27 +398,30 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
           </p>
           <button
             onClick={onNavigateToUpload}
-            className="text-xs bg-[#0067b8] hover:bg-[#005da6] text-white font-semibold px-4 py-2 rounded-[2px] transition-colors shadow-sm"
+            className="text-xs bg-[#0067b8] hover:bg-[#005da6] text-white font-semibold px-4 py-2 rounded-lg transition-colors shadow-sm"
           >
             Upload Assignment Now
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {filteredJobs.map((job) => {
             const currentStep = getStepIndex(job.status);
             const isExpanded = expandedJobId === job.id;
+            const isReady = job.status === 'ready';
 
             return (
               <div
                 key={job.id}
-                className="bg-white border border-[#e1dfdd] rounded-[2px] shadow-sm hover:border-[#8a8886] transition-all"
+                className={`bg-white border rounded-xl shadow-sm transition-all overflow-hidden ${
+                  isReady ? 'border-[#107c10] ring-2 ring-[#dff6dd]' : 'border-[#e1dfdd] hover:border-[#8a8886]'
+                }`}
               >
                 {/* Job Top Row Header */}
                 <div className="p-4 sm:p-5 border-b border-[#edebe9]">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-start space-x-3">
-                      <div className="w-10 h-10 rounded-[2px] bg-[#f3f2f1] border border-[#e1dfdd] flex items-center justify-center text-[#0067b8] shrink-0">
+                      <div className="w-10 h-10 rounded-lg bg-[#f3f2f1] border border-[#e1dfdd] flex items-center justify-center text-[#0067b8] shrink-0">
                         <FileText className="w-5 h-5" />
                       </div>
                       <div>
@@ -318,15 +430,21 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
                             {job.fileName}
                           </span>
                           {job.isUrgent && (
-                            <span className="text-[10px] bg-[#fff4ce] text-[#d83b01] font-semibold px-1.5 py-0.5 rounded-[2px] border border-[#f2c80f]">
+                            <span className="text-[10px] bg-[#fff4ce] text-[#d83b01] font-semibold px-2 py-0.5 rounded-full border border-[#f2c80f]">
                               Express
                             </span>
                           )}
                         </div>
                         <div className="text-xs text-[#605e5c] mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span className="font-mono font-semibold text-[#0067b8]">{job.id}</span>
+                          <span className="font-mono font-bold text-[#0067b8]">{job.id}</span>
                           <span>•</span>
                           <span>{job.pageCount} pages × {job.copies} set(s)</span>
+                          {job.pageRange && (
+                            <>
+                              <span>•</span>
+                              <span className="text-[#0067b8] font-semibold">Pages: {job.pageRange}</span>
+                            </>
+                          )}
                           <span>•</span>
                           <span className="capitalize">{job.colorMode === 'color' ? 'Full Color' : 'B&W'}</span>
                           <span>•</span>
@@ -345,6 +463,47 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
                       </div>
                     </div>
                   </div>
+
+                  {/* DIGITAL COUNTER PICKUP PASS (When Ready) */}
+                  {isReady && (
+                    <div className="mt-5 p-4 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 border-2 border-[#107c10] rounded-xl shadow-sm text-[#242424]">
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                        {/* Pass Info */}
+                        <div className="space-y-1.5 text-center md:text-left">
+                          <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#107c10] text-white">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>READY FOR COLLECTION</span>
+                          </div>
+                          <h4 className="text-base font-bold text-gray-900 flex items-center justify-center md:justify-start space-x-2">
+                            <span>Counter Pickup Barcode Pass</span>
+                            <Sparkles className="w-4 h-4 text-amber-500" />
+                          </h4>
+                          <p className="text-xs text-gray-600 max-w-md">
+                            Show this barcode at <strong className="text-gray-900">{job.pickupCounter}</strong>. Operator will scan or enter your sequential Order ID <strong className="font-mono text-[#0067b8]">{job.id}</strong> to verify and hand over your printout.
+                          </p>
+                          <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1 text-xs text-gray-700">
+                            <span className="bg-white/90 border border-gray-200 px-2 py-0.5 rounded-md font-medium">
+                              Pages: <strong>{job.pageRange || `All (${job.pageCount})`}</strong>
+                            </span>
+                            <span className="bg-white/90 border border-gray-200 px-2 py-0.5 rounded-md font-medium">
+                              Copies: <strong>{job.copies} set(s)</strong>
+                            </span>
+                            <span className="bg-white/90 border border-gray-200 px-2 py-0.5 rounded-md font-medium">
+                              Paid: <strong>₹{job.cost}.00</strong>
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Scannable Barcode & QR Box */}
+                        <div className="flex items-center space-x-3 bg-white p-3 rounded-xl border border-emerald-200 shadow-sm shrink-0">
+                          <BarcodeSVG code={job.id} />
+                          <div className="hidden sm:block border-l border-gray-200 pl-3">
+                            <QRCodeSVG code={job.id} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 4-Step Progress Tracker */}
                   <div className="mt-6 pt-4 border-t border-[#edebe9]">
@@ -402,7 +561,7 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
                             Printing
                           </div>
                           <div className="text-[10px] text-[#605e5c] hidden sm:block">
-                            Printing your pages
+                            Printing pages
                           </div>
                         </div>
 
@@ -475,7 +634,7 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
                       ) : (
                         <>
                           <Copy className="w-3.5 h-3.5" />
-                          <span>Copy Token ID</span>
+                          <span>Copy Order ID</span>
                         </>
                       )}
                     </button>
@@ -494,30 +653,30 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
                 {isExpanded && (
                   <div className="p-4 sm:p-5 bg-white border-t border-[#edebe9] text-xs space-y-4">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="p-2.5 bg-[#f3f2f1] border border-[#e1dfdd] rounded-[2px]">
+                      <div className="p-3 bg-[#f3f2f1] border border-[#e1dfdd] rounded-lg">
                         <span className="text-[#605e5c] block text-[11px]">Paper & Media</span>
                         <span className="font-semibold text-[#242424] capitalize">
                           {job.paperSize} ({job.paperType === 'photo' ? 'Photo Paper' : 'Plain Paper'})
                         </span>
                       </div>
-                      <div className="p-2.5 bg-[#f3f2f1] border border-[#e1dfdd] rounded-[2px]">
+                      <div className="p-3 bg-[#f3f2f1] border border-[#e1dfdd] rounded-lg">
                         <span className="text-[#605e5c] block text-[11px]">Payment Method</span>
                         <span className="font-semibold text-[#242424] capitalize">
                           {job.paymentMethod === 'upi' ? 'UPI Online' : 'Pay at Counter'}
                         </span>
                       </div>
-                      <div className="p-2.5 bg-[#f3f2f1] border border-[#e1dfdd] rounded-[2px]">
+                      <div className="p-3 bg-[#f3f2f1] border border-[#e1dfdd] rounded-lg">
                         <span className="text-[#605e5c] block text-[11px]">Student Roll No.</span>
                         <span className="font-semibold text-[#242424]">{job.studentRoll}</span>
                       </div>
-                      <div className="p-2.5 bg-[#f3f2f1] border border-[#e1dfdd] rounded-[2px]">
-                        <span className="text-[#605e5c] block text-[11px]">File Size & Format</span>
-                        <span className="font-semibold text-[#242424]">{job.fileSize} (PDF)</span>
+                      <div className="p-3 bg-[#f3f2f1] border border-[#e1dfdd] rounded-lg">
+                        <span className="text-[#605e5c] block text-[11px]">File & Pages</span>
+                        <span className="font-semibold text-[#242424]">{job.pageRange || `${job.pageCount} Pages`} (PDF)</span>
                       </div>
                     </div>
 
                     {job.instructions && (
-                      <div className="p-3 bg-[#e6f2fb]/40 border border-[#cbe4f9] rounded-[2px]">
+                      <div className="p-3 bg-[#e6f2fb]/40 border border-[#cbe4f9] rounded-lg">
                         <span className="font-semibold text-[#0067b8] block mb-0.5">Your Instructions to Operator:</span>
                         <span className="text-[#323130]">{job.instructions}</span>
                       </div>

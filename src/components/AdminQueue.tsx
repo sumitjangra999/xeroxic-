@@ -23,7 +23,9 @@ import {
   FileText,
   UserPlus,
   ShieldCheck,
-  Shield
+  Shield,
+  QrCode,
+  Sparkles
 } from 'lucide-react';
 
 interface AdminQueueProps {
@@ -33,13 +35,17 @@ interface AdminQueueProps {
 }
 
 export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
-  const [filter, setFilter] = useState<'all' | 'submitted' | 'processing' | 'ready' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all' | 'submitted' | 'processing' | 'ready' | 'completed'>('submitted');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<PrintJob | null>(null);
   const [previewJob, setPreviewJob] = useState<PrintJob | null>(null);
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
   const [newOrderAlert, setNewOrderAlert] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
+
+  // Quick Barcode / Instant Handover Scanner state
+  const [scannerInput, setScannerInput] = useState('');
+  const [scanFeedback, setScanFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   // Add Admin modal state
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
@@ -147,6 +153,49 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
     }
   };
 
+  const handleScanOrSubmitCode = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const code = scannerInput.trim().toUpperCase();
+    if (!code) return;
+
+    const foundJob = jobs.find((j) => j.id.toUpperCase() === code);
+    if (!foundJob) {
+      setScanFeedback({ message: `❌ No order found matching "${code}"`, type: 'error' });
+      setTimeout(() => setScanFeedback(null), 3500);
+      return;
+    }
+
+    if (foundJob.status === 'ready') {
+      handleUpdateStatus(foundJob.id, 'completed', 'Verified via Barcode Scan & Handed Over');
+      soundManager.playReadyChime();
+      setScanFeedback({
+        message: `✅ Verified! Order ${foundJob.id} (${foundJob.studentName}) marked as Handed Over!`,
+        type: 'success'
+      });
+      setScannerInput('');
+    } else if (foundJob.status === 'submitted') {
+      setPreviewJob(foundJob);
+      setScanFeedback({
+        message: `ℹ️ Order ${foundJob.id} is Queued. Opened for printing preview.`,
+        type: 'info'
+      });
+      setScannerInput('');
+    } else if (foundJob.status === 'processing') {
+      setScanFeedback({
+        message: `ℹ️ Order ${foundJob.id} is currently printing.`,
+        type: 'info'
+      });
+      setScannerInput('');
+    } else {
+      setScanFeedback({
+        message: `ℹ️ Order ${foundJob.id} is already marked as Delivered.`,
+        type: 'info'
+      });
+      setScannerInput('');
+    }
+    setTimeout(() => setScanFeedback(null), 4000);
+  };
+
   const handleDeleteJob = (jobId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm(`Permanently delete order ${jobId} and its files from the database and storage?`)) {
@@ -197,7 +246,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
             <h1 className="text-2xl font-semibold text-[#242424] tracking-tight">
               Xerox Operator Dashboard
             </h1>
-            <span className="text-xs bg-[#107c10]/15 text-[#107c10] font-semibold px-2 py-0.5 rounded-[3px] border border-[#107c10]/30">
+            <span className="text-xs bg-[#107c10]/15 text-[#107c10] font-semibold px-2.5 py-0.5 rounded-full border border-[#107c10]/30">
               Shop Open
             </span>
           </div>
@@ -211,7 +260,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           <button
             onClick={toggleSound}
             title={soundEnabled ? 'Mute Order Bell Chimes' : 'Enable Order Bell Chimes'}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-semibold flex items-center space-x-1.5 border transition-colors shadow-sm ${
+            className={`text-xs px-3 py-2 rounded-lg font-semibold flex items-center space-x-1.5 border transition-colors shadow-sm ${
               soundEnabled
                 ? 'bg-white text-[#107c10] border-[#107c10]/40 hover:bg-[#dff6dd]/30'
                 : 'bg-white text-[#a19f9d] border-[#8a8886] hover:bg-[#f3f2f1]'
@@ -224,7 +273,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           <button
             onClick={() => soundManager.playNewOrderBell()}
             title="Test audio chime"
-            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#8a8886] px-2.5 py-1.5 rounded-[2px] font-medium"
+            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#8a8886] px-3 py-2 rounded-lg font-medium"
           >
             Test Bell
           </button>
@@ -236,7 +285,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
               setAdminRegisterError('');
               setAdminRegisterSuccess('');
             }}
-            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#0067b8]/40 px-3 py-1.5 rounded-[2px] font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#0067b8]/40 px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
             title="Register a new counter operator / admin"
           >
             <UserPlus className="w-3.5 h-3.5" />
@@ -245,7 +294,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
           <button
             onClick={onRefresh}
-            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#242424] border border-[#8a8886] px-3.5 py-1.5 rounded-[2px] font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#242424] border border-[#8a8886] px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
           >
             <RefreshCw className="w-3.5 h-3.5 text-[#0067b8]" />
             <span>Refresh</span>
@@ -255,7 +304,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
       {/* Bell / New Incoming Request Alert Banner */}
       {newOrderAlert && (
-        <div className="mb-4 p-3.5 bg-[#fff4ce] text-[#835c00] border-2 border-[#f2c80f] rounded-[4px] text-xs font-semibold flex items-center justify-between animate-bounce">
+        <div className="mb-4 p-4 bg-[#fff4ce] text-[#835c00] border-2 border-[#f2c80f] rounded-xl text-xs font-semibold flex items-center justify-between animate-bounce shadow-sm">
           <div className="flex items-center space-x-2">
             <Bell className="w-4 h-4 text-[#d83b01]" />
             <span>{newOrderAlert}</span>
@@ -266,7 +315,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
       {/* Success Notification Bar */}
       {actionSuccessMsg && (
-        <div className="mb-4 p-3 bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] rounded-[2px] text-xs font-semibold flex items-center justify-between">
+        <div className="mb-4 p-3 bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] rounded-lg text-xs font-semibold flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <CheckCircle2 className="w-4 h-4" />
             <span>{actionSuccessMsg}</span>
@@ -277,56 +326,95 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
       {/* Operator KPI Metrics Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Queued Orders</div>
           <div className="text-2xl font-bold text-[#0067b8] mt-0.5">{submittedCount}</div>
           <div className="text-[10px] text-[#797775]">Awaiting print</div>
         </div>
 
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Printing Now</div>
           <div className="text-2xl font-bold text-[#d83b01] mt-0.5">{processingCount}</div>
           <div className="text-[10px] text-[#797775]">Being printed</div>
         </div>
 
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Ready for Pickup</div>
           <div className="text-2xl font-bold text-[#107c10] mt-0.5">{readyCount}</div>
           <div className="text-[10px] text-[#797775]">At Counter</div>
         </div>
 
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Delivered Today</div>
           <div className="text-2xl font-bold text-[#323130] mt-0.5">{completedCount}</div>
           <div className="text-[10px] text-[#797775]">Collected by students</div>
         </div>
 
-        <div className="bg-white border border-[#e1dfdd] p-3.5 rounded-[2px] shadow-sm col-span-2 sm:col-span-1">
+        <div className="bg-white border border-[#e1dfdd] p-4 rounded-xl shadow-sm col-span-2 sm:col-span-1">
           <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Today's Revenue</div>
           <div className="text-2xl font-bold text-[#0067b8] mt-0.5">₹{totalRevenue}</div>
           <div className="text-[10px] text-[#797775]">Across {jobs.length} orders</div>
         </div>
       </div>
 
-      {/* Filter and Search */}
-      <div className="bg-white border border-[#e1dfdd] p-3 rounded-[2px] mb-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Status Pills */}
-        <div className="flex space-x-1 overflow-x-auto w-full md:w-auto">
-          <button
-            onClick={() => setFilter('all')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
-              filter === 'all'
-                ? 'bg-[#0067b8] text-white font-semibold'
-                : 'text-[#605e5c] hover:bg-[#f3f2f1]'
+      {/* QUICK BARCODE SCANNER / INSTANT HANDOVER CARD */}
+      <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50 border border-blue-200 p-4 rounded-xl mb-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-9 h-9 rounded-lg bg-[#0067b8] text-white flex items-center justify-center shrink-0 shadow-sm">
+              <QrCode className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-[#0067b8] uppercase tracking-wide">
+                Quick Barcode Scanner & Handover
+              </div>
+              <p className="text-xs text-gray-600">
+                Scan student's barcode pass or type sequential Order ID (e.g. <strong className="font-mono text-gray-900">A001</strong>) for instant verification
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleScanOrSubmitCode} className="flex items-center space-x-2 w-full sm:w-auto">
+            <input
+              type="text"
+              placeholder="Scan barcode or type A001..."
+              value={scannerInput}
+              onChange={(e) => setScannerInput(e.target.value)}
+              className="px-3 py-2 text-xs font-mono font-bold tracking-wider border border-[#8a8886] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0067b8] bg-white w-full sm:w-64 uppercase shadow-sm"
+            />
+            <button
+              type="submit"
+              className="px-4 py-2 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded-lg shrink-0 shadow-sm transition-colors"
+            >
+              Verify / Handover
+            </button>
+          </form>
+        </div>
+
+        {scanFeedback && (
+          <div
+            className={`mt-2.5 p-2.5 rounded-lg text-xs font-semibold flex items-center space-x-2 animate-fadeIn ${
+              scanFeedback.type === 'success'
+                ? 'bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0]'
+                : scanFeedback.type === 'error'
+                ? 'bg-[#fde7e9] text-[#a80000] border border-[#f19999]'
+                : 'bg-[#e6f2fb] text-[#0067b8] border border-[#cbe4f9]'
             }`}
           >
-            All ({jobs.length})
-          </button>
+            <span>{scanFeedback.message}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Filter and Search */}
+      <div className="bg-white border border-[#e1dfdd] p-3 rounded-xl mb-4 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+        {/* Status Pills */}
+        <div className="flex space-x-1.5 overflow-x-auto w-full md:w-auto">
           <button
             onClick={() => setFilter('submitted')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-semibold transition-colors ${
               filter === 'submitted'
-                ? 'bg-[#0067b8] text-white font-semibold'
+                ? 'bg-[#0067b8] text-white'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
             }`}
           >
@@ -334,7 +422,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           </button>
           <button
             onClick={() => setFilter('processing')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'processing'
                 ? 'bg-[#0067b8] text-white font-semibold'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
@@ -344,7 +432,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           </button>
           <button
             onClick={() => setFilter('ready')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'ready'
                 ? 'bg-[#107c10] text-white font-semibold'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
@@ -354,7 +442,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           </button>
           <button
             onClick={() => setFilter('completed')}
-            className={`text-xs px-3 py-1.5 rounded-[2px] font-medium transition-colors ${
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
               filter === 'completed'
                 ? 'bg-[#323130] text-white font-semibold'
                 : 'text-[#605e5c] hover:bg-[#f3f2f1]'
@@ -362,23 +450,33 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           >
             Delivered ({completedCount})
           </button>
+          <button
+            onClick={() => setFilter('all')}
+            className={`text-xs px-3.5 py-1.5 rounded-lg font-medium transition-colors ${
+              filter === 'all'
+                ? 'bg-[#0067b8] text-white font-semibold'
+                : 'text-[#605e5c] hover:bg-[#f3f2f1]'
+            }`}
+          >
+            All ({jobs.length})
+          </button>
         </div>
 
         {/* Search */}
         <div className="relative w-full md:w-72">
-          <Search className="w-3.5 h-3.5 text-[#797775] absolute left-2.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-[#797775] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             placeholder="Search Order ID (e.g. A001), Roll No, File..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+            className="w-full pl-9 pr-3 py-1.5 text-xs border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
           />
         </div>
       </div>
 
       {/* Queue Table */}
-      <div className="bg-white border border-[#e1dfdd] rounded-[2px] shadow-sm overflow-hidden">
+      <div className="bg-white border border-[#e1dfdd] rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-[#faf9f8] text-[#605e5c] border-b border-[#edebe9]">
@@ -455,12 +553,17 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                         <span className="font-semibold text-[#0067b8]">{job.pageCount} pgs</span>
                         <span>×</span>
                         <span className="font-semibold">{job.copies} copy</span>
+                        {job.pageRange && (
+                          <span className="text-[10px] bg-blue-50 text-[#0067b8] font-bold px-1.5 py-0.5 rounded-md border border-blue-200">
+                            Pages: {job.pageRange}
+                          </span>
+                        )}
                         <span>•</span>
                         <span className="capitalize">{job.colorMode === 'color' ? 'Color' : 'B&W'}</span>
                         <span>•</span>
                         <span>{job.sides === 'double' ? 'Duplex' : 'Single'}</span>
                         {job.paperType === 'photo' && (
-                          <span className="text-[10px] bg-[#e6f2fb] text-[#0067b8] font-bold px-1.5 py-0.5 rounded border border-[#cbe4f9]">
+                          <span className="text-[10px] bg-[#e6f2fb] text-[#0067b8] font-bold px-1.5 py-0.5 rounded-md border border-[#cbe4f9]">
                             PHOTO PAPER
                           </span>
                         )}
@@ -491,25 +594,25 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                     {/* Status Badge */}
                     <td className="py-3 px-4">
                       {job.status === 'submitted' && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#e6f2fb] text-[#0067b8] border border-[#cbe4f9]">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#e6f2fb] text-[#0067b8] border border-[#cbe4f9]">
                           <Clock className="w-3 h-3" />
                           <span>Queued</span>
                         </span>
                       )}
                       {job.status === 'processing' && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#fff4ce] text-[#797673] border border-[#f2c80f]">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#fff4ce] text-[#797673] border border-[#f2c80f]">
                           <Printer className="w-3 h-3 text-[#0067b8] animate-pulse" />
                           <span className="text-[#323130]">Printing</span>
                         </span>
                       )}
                       {job.status === 'ready' && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0]">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0]">
                           <CheckCircle2 className="w-3 h-3" />
                           <span>Ready for Pickup</span>
                         </span>
                       )}
                       {job.status === 'completed' && (
-                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-medium bg-[#f3f2f1] text-[#605e5c] border border-[#d2d0ce]">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-[#f3f2f1] text-[#605e5c] border border-[#d2d0ce]">
                           <PackageCheck className="w-3 h-3" />
                           <span>Delivered</span>
                         </span>
@@ -522,7 +625,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                         {/* Direct Preview & Print Portal Button */}
                         <button
                           onClick={() => setPreviewJob(job)}
-                          className="bg-[#f3f2f1] hover:bg-[#edebe9] text-[#242424] border border-[#8a8886] px-2 py-1 rounded-[2px] font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
+                          className="bg-[#f3f2f1] hover:bg-[#edebe9] text-[#242424] border border-[#8a8886] px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
                           title="Open Web Print Preview & Direct Print"
                         >
                           <Eye className="w-3 h-3 text-[#0067b8]" />
@@ -537,7 +640,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                               }
                               handleUpdateStatus(job.id, 'processing', 'Printing in progress');
                             }}
-                            className="bg-[#0067b8] hover:bg-[#005da6] text-white px-2.5 py-1 rounded-[2px] font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
+                            className="bg-[#0067b8] hover:bg-[#005da6] text-white px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
                             title="Start Printing & Open Merged PDF"
                           >
                             <Printer className="w-3 h-3" />
@@ -548,7 +651,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                         {job.status === 'processing' && (
                           <button
                             onClick={() => handleUpdateStatus(job.id, 'ready', 'Printing complete. Kept at Counter.')}
-                            className="bg-[#107c10] hover:bg-[#0e690e] text-white px-2.5 py-1 rounded-[2px] font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
+                            className="bg-[#107c10] hover:bg-[#0e690e] text-white px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
                             title="Mark Ready for Pickup"
                           >
                             <Check className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -559,7 +662,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                         {job.status === 'ready' && (
                           <button
                             onClick={() => handleUpdateStatus(job.id, 'completed', 'Collected by student')}
-                            className="bg-[#323130] hover:bg-[#201f1e] text-white px-2.5 py-1 rounded-[2px] font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
+                            className="bg-[#323130] hover:bg-[#201f1e] text-white px-3 py-1.5 rounded-lg font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
                             title="Mark Handed Over"
                           >
                             <PackageCheck className="w-3.5 h-3.5" />
@@ -569,7 +672,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
                         <button
                           onClick={(e) => handleDeleteJob(job.id, e)}
-                          className="p-1 text-[#a19f9d] hover:text-[#d83b01] hover:bg-[#fed9cc]/40 rounded-[2px] transition-colors"
+                          className="p-1.5 text-[#a19f9d] hover:text-[#d83b01] hover:bg-[#fed9cc]/40 rounded-lg transition-colors"
                           title="Delete from Database & Storage"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -577,7 +680,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
                         <button
                           onClick={() => setSelectedJob(job)}
-                          className="p-1 text-[#605e5c] hover:text-[#0067b8] hover:bg-[#e6f2fb] rounded-[2px] transition-colors"
+                          className="p-1.5 text-[#605e5c] hover:text-[#0067b8] hover:bg-[#e6f2fb] rounded-lg transition-colors"
                           title="View Order Details"
                         >
                           <ChevronRight className="w-4 h-4" />
@@ -649,7 +752,9 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
             {/* Print Specifications Banner */}
             <div className="px-4 py-2.5 bg-[#f3f2f1] border-b border-[#edebe9] flex flex-wrap items-center justify-between gap-2 text-xs">
               <div className="flex flex-wrap items-center gap-3">
-                <span className="font-semibold text-[#0067b8]">{previewJob.pageCount} Pages</span>
+                <span className="font-semibold text-[#0067b8]">
+                  {previewJob.pageRange ? `Selected Pages: ${previewJob.pageRange} (${previewJob.pageCount} pgs)` : `${previewJob.pageCount} Pages`}
+                </span>
                 <span>•</span>
                 <span className="font-semibold">{previewJob.copies} Copy/Set</span>
                 <span>•</span>
@@ -680,10 +785,10 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   id="admin-preview-iframe"
                   src={previewJob.fileUrl}
                   title={previewJob.fileName}
-                  className="w-full h-full min-h-[500px] bg-white border border-[#c8c6c4] rounded shadow"
+                  className="w-full h-full min-h-[500px] bg-white border border-[#c8c6c4] rounded-lg shadow"
                 />
               ) : (
-                <div className="p-8 bg-white border border-[#c8c6c4] rounded text-center max-w-md space-y-3 shadow">
+                <div className="p-8 bg-white border border-[#c8c6c4] rounded-xl text-center max-w-md space-y-3 shadow">
                   <FileText className="w-12 h-12 text-[#0067b8] mx-auto" />
                   <div className="font-semibold text-sm text-[#242424]">{previewJob.fileName}</div>
                   <p className="text-xs text-[#605e5c]">
@@ -691,7 +796,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   </p>
                   <button
                     onClick={handleDirectWebPrint}
-                    className="px-4 py-2 bg-[#0067b8] text-white text-xs font-semibold rounded"
+                    className="px-4 py-2 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded-lg shadow-sm"
                   >
                     Send to Printer
                   </button>
@@ -710,7 +815,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                 {previewJob.status === 'submitted' && (
                   <button
                     onClick={() => handleUpdateStatus(previewJob.id, 'processing', 'Printing in progress')}
-                    className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 rounded font-semibold text-xs flex items-center space-x-1.5 shadow-sm"
+                    className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 rounded-lg font-semibold text-xs flex items-center space-x-1.5 shadow-sm"
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>Start Printing</span>
@@ -720,7 +825,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                 {previewJob.status === 'processing' && (
                   <button
                     onClick={() => handleUpdateStatus(previewJob.id, 'ready', 'Printing complete. Kept at Counter.')}
-                    className="bg-[#107c10] hover:bg-[#0e690e] text-white px-4 py-2 rounded font-semibold text-xs flex items-center space-x-1.5 shadow-sm"
+                    className="bg-[#107c10] hover:bg-[#0e690e] text-white px-4 py-2 rounded-lg font-semibold text-xs flex items-center space-x-1.5 shadow-sm"
                   >
                     <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                     <span>Mark Ready for Pickup</span>
@@ -730,7 +835,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                 {previewJob.status === 'ready' && (
                   <button
                     onClick={() => handleUpdateStatus(previewJob.id, 'completed', 'Collected by student')}
-                    className="bg-[#323130] hover:bg-[#201f1e] text-white px-4 py-2 rounded font-semibold text-xs flex items-center space-x-1.5 shadow-sm"
+                    className="bg-[#323130] hover:bg-[#201f1e] text-white px-4 py-2 rounded-lg font-semibold text-xs flex items-center space-x-1.5 shadow-sm"
                   >
                     <PackageCheck className="w-3.5 h-3.5" />
                     <span>Mark Handed Over</span>
@@ -739,7 +844,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
                 <button
                   onClick={() => setPreviewJob(null)}
-                  className="px-3.5 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold rounded text-xs"
+                  className="px-4 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold rounded-lg text-xs"
                 >
                   Close
                 </button>
@@ -752,7 +857,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
       {/* Operator Job Inspection Modal */}
       {selectedJob && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white border border-[#e1dfdd] rounded-[2px] shadow-2xl max-w-xl w-full p-6 animate-fadeIn">
+          <div className="bg-white border border-[#e1dfdd] rounded-xl shadow-2xl max-w-xl w-full p-6 animate-fadeIn">
             <div className="flex items-center justify-between pb-3 border-b border-[#edebe9]">
               <div>
                 <span className="text-xs font-mono font-bold text-[#0067b8]">{selectedJob.id}</span>
@@ -760,7 +865,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
               </div>
               <button
                 onClick={() => setSelectedJob(null)}
-                className="p-1 text-[#605e5c] hover:text-[#242424] rounded"
+                className="p-1.5 text-[#605e5c] hover:text-[#242424] rounded-lg"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -768,7 +873,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
             <div className="py-4 space-y-4 text-xs">
               {/* Student info */}
-              <div className="p-3 bg-[#f3f2f1] rounded-[2px] grid grid-cols-2 gap-2">
+              <div className="p-3 bg-[#f3f2f1] rounded-lg grid grid-cols-2 gap-2">
                 <div>
                   <span className="text-[#605e5c] block">Student Name:</span>
                   <span className="font-semibold text-[#242424]">{selectedJob.studentName}</span>
@@ -789,38 +894,38 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
               {/* Print specs */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg">
                   <span className="text-[#605e5c] block">Pages:</span>
-                  <span className="font-semibold">{selectedJob.pageCount} pages</span>
+                  <span className="font-semibold">{selectedJob.pageRange || `${selectedJob.pageCount} pages`}</span>
                 </div>
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg">
                   <span className="text-[#605e5c] block">Copies:</span>
                   <span className="font-semibold">{selectedJob.copies} copy</span>
                 </div>
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg">
                   <span className="text-[#605e5c] block">Color:</span>
                   <span className="font-semibold capitalize">{selectedJob.colorMode}</span>
                 </div>
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg">
                   <span className="text-[#605e5c] block">Sides:</span>
                   <span className="font-semibold capitalize">{selectedJob.sides} sided</span>
                 </div>
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg">
                   <span className="text-[#605e5c] block">Paper Size:</span>
                   <span className="font-semibold">{selectedJob.paperSize}</span>
                 </div>
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg">
                   <span className="text-[#605e5c] block">Paper Type:</span>
                   <span className="font-semibold">{selectedJob.paperType === 'photo' ? 'Photo Paper (+₹15)' : 'Plain Paper'}</span>
                 </div>
-                <div className="p-2 border border-[#e1dfdd]">
+                <div className="p-2.5 border border-[#e1dfdd] rounded-lg col-span-2 sm:col-span-1">
                   <span className="text-[#605e5c] block">Payment:</span>
                   <span className="font-semibold capitalize">{selectedJob.paymentMethod === 'upi' ? 'UPI Online' : 'Pay at Counter'}</span>
                 </div>
               </div>
 
               {selectedJob.fileUrl && (
-                <div className="p-2.5 bg-[#e6f2fb]/50 border border-[#0067b8]/20 rounded-[2px] flex items-center justify-between">
+                <div className="p-3 bg-[#e6f2fb]/50 border border-[#0067b8]/20 rounded-lg flex items-center justify-between">
                   <div>
                     <span className="text-[#0067b8] font-semibold block text-xs">Attached Student Document</span>
                     <span className="text-[11px] text-[#605e5c]">{selectedJob.fileName}</span>
@@ -831,7 +936,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                         setPreviewJob(selectedJob);
                         setSelectedJob(null);
                       }}
-                      className="inline-flex items-center space-x-1 px-3 py-1.5 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded-[2px] shadow-sm transition-colors"
+                      className="inline-flex items-center space-x-1 px-3 py-1.5 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
                       <span>Preview & Print</span>
@@ -841,7 +946,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                       download={selectedJob.fileName}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-white border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] text-xs font-semibold rounded-[2px]"
+                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-white border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] text-xs font-semibold rounded-lg"
                     >
                       <Download className="w-3.5 h-3.5" />
                       <span>Download</span>
@@ -851,7 +956,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
               )}
 
               {selectedJob.instructions && (
-                <div className="p-3 bg-[#fff4ce]/60 border border-[#f2c80f] rounded-[2px]">
+                <div className="p-3 bg-[#fff4ce]/60 border border-[#f2c80f] rounded-lg">
                   <span className="font-semibold text-[#d83b01] block mb-0.5">Note from Student:</span>
                   <p className="text-[#242424]">{selectedJob.instructions}</p>
                 </div>
@@ -875,7 +980,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   setPreviewJob(selectedJob);
                   setSelectedJob(null);
                 }}
-                className="bg-[#0067b8] hover:bg-[#005da6] text-white px-3.5 py-2 rounded-[2px] font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-sm"
+                className="bg-[#0067b8] hover:bg-[#005da6] text-white px-3.5 py-2 rounded-lg font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-sm"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Open in Web Print Portal</span>
@@ -890,7 +995,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                     handleUpdateStatus(selectedJob.id, 'processing', 'Printing in progress');
                     setSelectedJob(null);
                   }}
-                  className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 rounded-[2px] font-semibold text-xs transition-colors flex items-center space-x-1.5"
+                  className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 rounded-lg font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-sm"
                   title="Start Printing & Open Merged PDF"
                 >
                   <Printer className="w-3.5 h-3.5" />
@@ -903,7 +1008,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                     handleUpdateStatus(selectedJob.id, 'ready', 'Printing complete. Kept at Counter.');
                     setSelectedJob(null);
                   }}
-                  className="bg-[#107c10] hover:bg-[#0e690e] text-white px-4 py-2 rounded-[2px] font-semibold text-xs transition-colors flex items-center space-x-1.5"
+                  className="bg-[#107c10] hover:bg-[#0e690e] text-white px-4 py-2 rounded-lg font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-sm"
                 >
                   <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>Mark Ready</span>
@@ -915,7 +1020,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                     handleUpdateStatus(selectedJob.id, 'completed', 'Collected by student');
                     setSelectedJob(null);
                   }}
-                  className="bg-[#323130] hover:bg-[#201f1e] text-white px-4 py-2 rounded-[2px] font-semibold text-xs transition-colors flex items-center space-x-1.5"
+                  className="bg-[#323130] hover:bg-[#201f1e] text-white px-4 py-2 rounded-lg font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-sm"
                 >
                   <PackageCheck className="w-3.5 h-3.5" />
                   <span>Mark Handed Over</span>
@@ -923,7 +1028,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
               )}
               <button
                 onClick={() => setSelectedJob(null)}
-                className="px-3 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold text-xs rounded-[2px]"
+                className="px-3.5 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold text-xs rounded-lg"
               >
                 Close
               </button>
@@ -935,7 +1040,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
       {/* Add New Admin Modal */}
       {showAddAdminModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-[4px] border border-[#8a8886] shadow-2xl max-w-lg w-full overflow-hidden animate-fadeIn">
+          <div className="bg-white rounded-xl border border-[#8a8886] shadow-2xl max-w-lg w-full overflow-hidden animate-fadeIn">
             <div className="p-4 bg-[#faf9f8] border-b border-[#edebe9] flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 rounded-full bg-[#e6f2fb] text-[#0067b8] flex items-center justify-center">
@@ -948,7 +1053,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
               </div>
               <button
                 onClick={() => setShowAddAdminModal(false)}
-                className="text-[#605e5c] hover:text-[#242424] p-1 rounded"
+                className="text-[#605e5c] hover:text-[#242424] p-1.5 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -956,12 +1061,12 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
 
             <form onSubmit={handleRegisterNewAdmin} className="p-5 space-y-3.5 text-xs">
               {adminRegisterError && (
-                <div className="p-2.5 bg-[#fde7e9] text-[#a80000] border border-[#f19999] rounded-[2px]">
+                <div className="p-2.5 bg-[#fde7e9] text-[#a80000] border border-[#f19999] rounded-lg">
                   {adminRegisterError}
                 </div>
               )}
               {adminRegisterSuccess && (
-                <div className="p-2.5 bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] rounded-[2px] font-medium">
+                <div className="p-2.5 bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] rounded-lg font-medium">
                   {adminRegisterSuccess}
                 </div>
               )}
@@ -975,7 +1080,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   placeholder="e.g. Ramesh Kumar (Counter 2)"
                   value={newAdminName}
                   onChange={(e) => setNewAdminName(e.target.value)}
-                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
                 />
               </div>
 
@@ -989,7 +1094,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   value={newAdminUsername}
                   onChange={(e) => setNewAdminUsername(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
                 />
               </div>
 
@@ -1002,7 +1107,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   placeholder="e.g. admin2@college.edu"
                   value={newAdminEmail}
                   onChange={(e) => setNewAdminEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
                 />
               </div>
 
@@ -1016,7 +1121,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   value={newAdminPassword}
                   onChange={(e) => setNewAdminPassword(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
                 />
               </div>
 
@@ -1024,13 +1129,13 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                 <button
                   type="button"
                   onClick={() => setShowAddAdminModal(false)}
-                  className="px-3 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold rounded-[2px]"
+                  className="px-3.5 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold rounded-lg"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 font-semibold rounded-[2px] shadow-sm flex items-center space-x-1.5"
+                  className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 font-semibold rounded-lg shadow-sm flex items-center space-x-1.5"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>Create Admin Account</span>
@@ -1046,13 +1151,13 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   {adminsList.map((a) => (
                     <div
                       key={a.id}
-                      className="p-2 bg-[#f3f2f1] rounded-[2px] flex items-center justify-between text-[11px]"
+                      className="p-2.5 bg-[#f3f2f1] rounded-lg flex items-center justify-between text-[11px]"
                     >
                       <div>
                         <span className="font-semibold text-[#242424]">{a.name}</span>
                         <span className="text-[#605e5c] ml-2 font-mono">({a.username})</span>
                       </div>
-                      <span className="text-[#107c10] font-semibold text-[10px] bg-[#dff6dd] px-1.5 py-0.5 rounded border border-[#a2e6a0]">
+                      <span className="text-[#107c10] font-semibold text-[10px] bg-[#dff6dd] px-2 py-0.5 rounded-full border border-[#a2e6a0]">
                         Active
                       </span>
                     </div>

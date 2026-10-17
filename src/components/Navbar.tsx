@@ -40,64 +40,80 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center space-x-8">
             <div
               className="flex items-center space-x-2.5 cursor-pointer"
-              onClick={() => onTabChange('home')}
+              onClick={() => onTabChange(isAdmin ? 'queue' : 'home')}
+              title={isAdmin ? 'Xerox Operator Dashboard' : 'Home'}
             >
               <XeroxicLogo size="md" />
             </div>
 
             {/* Navigation links */}
             <nav className="hidden md:flex space-x-1">
-              <button
-                onClick={() => onTabChange('home')}
-                className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'home'
-                    ? 'border-[#0067b8] text-[#0067b8] font-semibold'
-                    : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
-                }`}
-              >
-                Home
-              </button>
-              <button
-                onClick={() => onTabChange('upload')}
-                className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'upload'
-                    ? 'border-[#0067b8] text-[#0067b8] font-semibold'
-                    : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
-                }`}
-              >
-                Print Portal
-              </button>
-              <button
-                onClick={() => onTabChange('rates')}
-                className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'rates'
-                    ? 'border-[#0067b8] text-[#0067b8] font-semibold'
-                    : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
-                }`}
-              >
-                Rates & Pricing
-              </button>
-              <button
-                onClick={() => onTabChange('track')}
-                className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'track'
-                    ? 'border-[#0067b8] text-[#0067b8] font-semibold'
-                    : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
-                }`}
-              >
-                Track Orders
-              </button>
-              {isAdmin && (
-                <button
-                  onClick={() => onTabChange('queue')}
-                  className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
-                    activeTab === 'queue'
-                      ? 'border-[#0067b8] text-[#0067b8] font-semibold'
-                      : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
-                  }`}
-                >
-                  Admin Queue
-                </button>
+              {isAdmin ? (
+                <>
+                  <button
+                    onClick={() => onTabChange('queue')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'queue'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Operator Counter Queue
+                  </button>
+                  <button
+                    onClick={() => onTabChange('rates')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'rates'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Rate Card
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={() => onTabChange('home')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'home'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Home
+                  </button>
+                  <button
+                    onClick={() => onTabChange('upload')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'upload'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Print Portal
+                  </button>
+                  <button
+                    onClick={() => onTabChange('rates')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'rates'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Rates & Pricing
+                  </button>
+                  <button
+                    onClick={() => onTabChange('track')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'track'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Track Orders
+                  </button>
+                </>
               )}
             </nav>
           </div>
@@ -156,47 +172,60 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Mobile subnav */}
       <div className="md:hidden flex overflow-x-auto border-t border-[#edebe9] px-4 py-2 space-x-2 bg-[#faf9f8]">
-        <button
-          onClick={() => onTabChange('home')}
-          className={`text-xs px-3 py-1 rounded-[3px] font-medium whitespace-nowrap ${
-            activeTab === 'home' ? 'bg-[#0067b8] text-white' : 'text-[#605e5c]'
-          }`}
-        >
-          Home
-        </button>
-        <button
-          onClick={() => onTabChange('upload')}
-          className={`text-xs px-3 py-1 rounded-[3px] font-medium whitespace-nowrap ${
-            activeTab === 'upload' ? 'bg-[#0067b8] text-white' : 'text-[#605e5c]'
-          }`}
-        >
-          Print Portal
-        </button>
-        <button
-          onClick={() => onTabChange('rates')}
-          className={`text-xs px-3 py-1 rounded-[3px] font-medium whitespace-nowrap ${
-            activeTab === 'rates' ? 'bg-[#0067b8] text-white' : 'text-[#605e5c]'
-          }`}
-        >
-          Rates
-        </button>
-        <button
-          onClick={() => onTabChange('track')}
-          className={`text-xs px-3 py-1 rounded-[3px] font-medium whitespace-nowrap ${
-            activeTab === 'track' ? 'bg-[#0067b8] text-white' : 'text-[#605e5c]'
-          }`}
-        >
-          Track Orders
-        </button>
-        {isAdmin && (
-          <button
-            onClick={() => onTabChange('queue')}
-            className={`text-xs px-3 py-1 rounded-[3px] font-medium whitespace-nowrap ${
-              activeTab === 'queue' ? 'bg-[#0067b8] text-white' : 'text-[#605e5c]'
-            }`}
-          >
-            Admin Queue
-          </button>
+        {isAdmin ? (
+          <>
+            <button
+              onClick={() => onTabChange('queue')}
+              className={`text-xs px-3 py-1.5 rounded-md font-semibold whitespace-nowrap transition-colors ${
+                activeTab === 'queue' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Operator Counter Queue
+            </button>
+            <button
+              onClick={() => onTabChange('rates')}
+              className={`text-xs px-3 py-1.5 rounded-md font-semibold whitespace-nowrap transition-colors ${
+                activeTab === 'rates' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Rate Card
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => onTabChange('home')}
+              className={`text-xs px-3 py-1.5 rounded-md font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'home' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Home
+            </button>
+            <button
+              onClick={() => onTabChange('upload')}
+              className={`text-xs px-3 py-1.5 rounded-md font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'upload' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Print Portal
+            </button>
+            <button
+              onClick={() => onTabChange('rates')}
+              className={`text-xs px-3 py-1.5 rounded-md font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'rates' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Rates
+            </button>
+            <button
+              onClick={() => onTabChange('track')}
+              className={`text-xs px-3 py-1.5 rounded-md font-medium whitespace-nowrap transition-colors ${
+                activeTab === 'track' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Track Orders
+            </button>
+          </>
         )}
       </div>
     </header>
