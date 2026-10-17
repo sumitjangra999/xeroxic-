@@ -245,7 +245,7 @@ export function App() {
                 />
               )}
 
-              {activeTab === 'rates' && <RateCard />}
+              {activeTab === 'rates' && <RateCard user={currentUser} />}
 
               {(activeTab === 'queue' || (currentUser?.role === 'admin' && activeTab === 'home')) && (
                 <AdminQueue

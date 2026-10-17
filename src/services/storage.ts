@@ -464,10 +464,57 @@ export function registerAdminAccount(data: {
 
     const updated = [...admins, newAdmin];
     localStorage.setItem(STORAGE_KEY_ADMIN_ACCOUNTS, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('xeroxic_admins_updated', { detail: updated }));
+    uploadAdminsToSupabase(updated).catch(() => {});
     return { success: true, account: newAdmin };
   } catch (e: any) {
     return { success: false, message: e.message || 'Error creating admin account.' };
   }
+}
+
+const SYSTEM_ADMINS_FILE = 'system_records/_xeroxic_admin_accounts.json';
+
+export async function uploadAdminsToSupabase(admins: AdminAccount[]): Promise<boolean> {
+  try {
+    const blob = new Blob([JSON.stringify(admins, null, 2)], { type: 'application/json' });
+    const { error } = await supabase.storage.from('assignment').upload(SYSTEM_ADMINS_FILE, blob, { upsert: true });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+export async function syncAdminsFromSupabase(): Promise<AdminAccount[]> {
+  try {
+    const { data, error } = await supabase.storage.from('assignment').download(SYSTEM_ADMINS_FILE);
+    if (!error && data) {
+      const text = await data.text();
+      const remoteAdmins: AdminAccount[] = JSON.parse(text);
+      if (Array.isArray(remoteAdmins) && remoteAdmins.length > 0) {
+        const local = getRegisteredAdmins();
+        const map = new Map<string, AdminAccount>();
+        local.forEach((a) => map.set(a.id, a));
+        remoteAdmins.forEach((a) => map.set(a.id, a));
+        const merged = Array.from(map.values());
+        localStorage.setItem(STORAGE_KEY_ADMIN_ACCOUNTS, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent('xeroxic_admins_updated', { detail: merged }));
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not sync admins from Supabase:', err);
+  }
+  return getRegisteredAdmins();
+}
+
+export function deleteAdminAccount(adminId: string): boolean {
+  if (adminId === 'admin-01') return false; // Protected superadmin
+  const admins = getRegisteredAdmins();
+  const updated = admins.filter((a) => a.id !== adminId);
+  localStorage.setItem(STORAGE_KEY_ADMIN_ACCOUNTS, JSON.stringify(updated));
+  window.dispatchEvent(new CustomEvent('xeroxic_admins_updated', { detail: updated }));
+  uploadAdminsToSupabase(updated).catch(() => {});
+  return true;
 }
 
 export function verifyAdminLogin(

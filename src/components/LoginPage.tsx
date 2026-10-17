@@ -321,28 +321,27 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
                 </button>
               </div>
 
-              {/* Status and Sign Up switch */}
-              <div className="p-2.5 bg-[#f9fafb] border border-[#e5e7eb] rounded-md text-[11px] text-[#6b7280]">
+              {/* Student / Admin Portal Guidance Notice */}
+              <div className="p-3 bg-[#f8fafc] border border-[#e2e8f0] rounded-xl text-xs space-y-1">
                 {isAdminMode ? (
-                  <div className="flex items-center space-x-1.5 text-[#111827] font-medium">
-                    <ShieldCheck className="w-3.5 h-3.5 text-[#0062e0] shrink-0" />
-                    <span>Authorized Xerox Operator Access Portal</span>
+                  <div className="flex items-start space-x-2 text-[#334155]">
+                    <ShieldCheck className="w-4 h-4 text-[#0062e0] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-[#0f172a] block">Authorized Admin Portal</span>
+                      <span className="text-[11px] text-[#64748b]">
+                        Sign in with your operator username & password to access the print queue, edit copy prices, and manage student accounts.
+                      </span>
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between">
-                    <span>
-                      Demo Student: <strong className="text-[#111827]">2024CS1092</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('signup');
-                        setErrorMessage('');
-                      }}
-                      className="text-[#0062e0] hover:underline font-semibold"
-                    >
-                      New student? Sign Up
-                    </button>
+                  <div className="flex items-start space-x-2 text-[#334155]">
+                    <AlertCircle className="w-4 h-4 text-[#0062e0] shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold text-[#0f172a] block">Student Instructions</span>
+                      <span className="text-[11px] text-[#64748b]">
+                        First-time students must register via the <strong>Sign Up</strong> tab before logging in. If your account is disabled or blocked, please visit the Xerox counter.
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>

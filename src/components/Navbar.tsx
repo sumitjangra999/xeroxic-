@@ -68,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
                     }`}
                   >
-                    Registered Students
+                    Students & Admins
                   </button>
                   <button
                     onClick={() => onTabChange('rates')}
@@ -78,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
                     }`}
                   >
-                    Rate Card
+                    Edit Rates & Pricing
                   </button>
                 </>
               ) : (

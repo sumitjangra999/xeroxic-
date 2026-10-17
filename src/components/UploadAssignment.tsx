@@ -4,6 +4,7 @@ import { addPrintJobAsync, generateOrderId } from '../services/storage';
 import { mergeFilesToPdf, MAX_PAGE_COUNT, MAX_TOTAL_SIZE_BYTES } from '../utils/pdfMerger';
 import { openRazorpayCheckout } from '../services/razorpay';
 import { soundManager } from '../utils/audio';
+import { getPricingConfig, PricingConfig } from '../services/pricing';
 import { PDFDocument } from 'pdf-lib';
 import {
   Upload,
@@ -152,20 +153,35 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successJob, setSuccessJob] = useState<PrintJob | null>(null);
 
+  // Dynamic pricing configured by admin (defaults: B&W ₹2/sheet, Color ₹10/pg, etc.)
+  const [pricing, setPricing] = useState<PricingConfig>(() => getPricingConfig());
+
+  React.useEffect(() => {
+    const handlePricingUpdate = (e: any) => {
+      if (e.detail) {
+        setPricing(e.detail);
+      } else {
+        setPricing(getPricingConfig());
+      }
+    };
+    window.addEventListener('xeroxic_pricing_updated', handlePricingUpdate);
+    return () => window.removeEventListener('xeroxic_pricing_updated', handlePricingUpdate);
+  }, []);
+
   // Price calculations - strictly 0 until files are uploaded and merged!
   const hasFile = fileList.length > 0 && Boolean(mergedFile);
-  const paperMultiplier = paperSize === 'A3' ? 2 : 1;
+  const paperMultiplier = paperSize === 'A3' ? pricing.a3Multiplier : (paperSize === 'Letter' ? pricing.letterPaperMultiplier : 1);
   // Physical sheets of paper used: 2 pages fit on 1 sheet front-and-back when double-sided
   const sheetsCount = hasFile ? (sides === 'double' ? Math.ceil(pageCount / 2) : pageCount) : 0;
-  // Rate per copy:
+  // Rate per copy based on admin configured criteria:
   // - B&W: ₹2.00 per physical sheet (1 sheet holds 2 pages front & back for ₹2.00)
   // - Color: ₹10.00 per single-sided page, ₹9.00 per side for double-sided
   const printRatePerCopy = colorMode === 'color'
-    ? (sides === 'double' ? pageCount * 9 : pageCount * 10) * paperMultiplier
-    : (sides === 'double' ? Math.ceil(pageCount / 2) * 2 : pageCount * 2) * paperMultiplier;
+    ? (sides === 'double' ? pageCount * pricing.colorDoubleSided : pageCount * pricing.colorSingleSided) * paperMultiplier
+    : (sides === 'double' ? Math.ceil(pageCount / 2) * pricing.bwDoubleSided : pageCount * pricing.bwSingleSided) * paperMultiplier;
   const pagesCost = hasFile ? printRatePerCopy * copies : 0;
-  const photoPaperFee = hasFile && paperType === 'photo' ? 15 * copies : 0;
-  const urgentFee = hasFile && isUrgent ? 10 : 0;
+  const photoPaperFee = hasFile && paperType === 'photo' ? pricing.photoPaperFee * copies : 0;
+  const urgentFee = hasFile && isUrgent ? pricing.urgentFee : 0;
   const totalCost = hasFile ? pagesCost + photoPaperFee + urgentFee : 0;
 
   // Merge files pipeline using pdf-lib
@@ -1337,7 +1353,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                     <div>
                       <div className="text-xs font-semibold text-[#242424]">Black & White</div>
                       <div className="text-[11px] text-[#605e5c] mt-0.5">Assignments, notes & reports</div>
-                      <div className="text-xs font-bold text-[#0067b8] mt-1">₹2.00 / page</div>
+                      <div className="text-xs font-bold text-[#0067b8] mt-1">₹{pricing.bwSingleSided}.00 / page</div>
                     </div>
                     {colorMode === 'bw' && <Check className="w-4 h-4 text-[#0067b8]" />}
                   </div>
@@ -1353,7 +1369,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                     <div>
                       <div className="text-xs font-semibold text-[#242424]">Color Print</div>
                       <div className="text-[11px] text-[#605e5c] mt-0.5">Charts, diagrams & cover pages</div>
-                      <div className="text-xs font-bold text-[#0067b8] mt-1">₹10.00 / page</div>
+                      <div className="text-xs font-bold text-[#0067b8] mt-1">₹{pricing.colorSingleSided}.00 / page</div>
                     </div>
                     {colorMode === 'color' && <Check className="w-4 h-4 text-[#0067b8]" />}
                   </div>
@@ -1382,10 +1398,10 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                         {sides === 'double' && <Check className="w-3.5 h-3.5 text-[#0067b8]" />}
                       </div>
                       <div className="text-[11px] text-[#107c10] font-semibold mt-0.5">
-                        Front & Back (₹2 / sheet)
+                        Front & Back (₹{pricing.bwDoubleSided} / sheet)
                       </div>
                       <div className="text-[10px] text-[#605e5c]">
-                        2 pages fit on 1 sheet for ₹2
+                        2 pages fit on 1 sheet for ₹{pricing.bwDoubleSided}
                       </div>
                     </button>
 
@@ -1403,7 +1419,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                         {sides === 'single' && <Check className="w-3.5 h-3.5 text-[#0067b8]" />}
                       </div>
                       <div className="text-[11px] text-[#0067b8] font-semibold mt-0.5">
-                        Front Only (₹2 / page)
+                        Front Only (₹{pricing.bwSingleSided} / page)
                       </div>
                       <div className="text-[10px] text-[#605e5c]">
                         1 page per separate sheet
