@@ -946,7 +946,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                   {urgentFee > 0 && (
                     <div className="flex justify-between text-[#605e5c]">
                       <span>Urgent Priority Fee</span>
-                      <span className="font-medium text-[#242424]">+₹10.00</span>
+                      <span className="font-medium text-[#242424]">+₹{urgentFee}.00</span>
                     </div>
                   )}
                 </div>

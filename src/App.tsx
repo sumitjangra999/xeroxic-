@@ -28,6 +28,7 @@ export function App() {
     if (user?.role === 'admin') return 'queue';
     return 'upload';
   });
+  const [adminUsersSubTab, setAdminUsersSubTab] = useState<'students' | 'admins'>('students');
   const [showSignInModal, setShowSignInModal] = useState<boolean>(false);
 
   // Scroll to top on navigation
@@ -252,7 +253,11 @@ export function App() {
                   user={currentUser || DEMO_STUDENT}
                   jobs={jobs}
                   onRefresh={handleRefreshJobs}
-                  onNavigateToUsers={() => handleTabChange('users')}
+                  onNavigateToUsers={(subTab?: 'students' | 'admins') => {
+                    if (subTab) setAdminUsersSubTab(subTab);
+                    handleTabChange('users');
+                  }}
+                  onNavigateToRates={() => handleTabChange('rates')}
                 />
               )}
 
@@ -260,6 +265,7 @@ export function App() {
                 <AdminUsers
                   user={currentUser || DEMO_STUDENT}
                   jobs={jobs}
+                  initialSubTab={adminUsersSubTab}
                 />
               )}
 

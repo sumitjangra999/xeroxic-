@@ -35,10 +35,17 @@ import {
 interface AdminUsersProps {
   user: User;
   jobs: PrintJob[];
+  initialSubTab?: 'students' | 'admins';
 }
 
-export const AdminUsers: React.FC<AdminUsersProps> = ({ user, jobs }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'students' | 'admins'>('students');
+export const AdminUsers: React.FC<AdminUsersProps> = ({ user, jobs, initialSubTab }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'students' | 'admins'>(initialSubTab || 'students');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
 
   // Students state
   const [accounts, setAccounts] = useState<RegisteredAccount[]>(() => getRegisteredAccounts());

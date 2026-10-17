@@ -198,7 +198,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 activeTab === 'users' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
               }`}
             >
-              Students ({activeTab === 'users' ? '●' : ''})
+              Students & Admins ({activeTab === 'users' ? '●' : ''})
             </button>
             <button
               onClick={() => onTabChange('rates')}
@@ -206,7 +206,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 activeTab === 'rates' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
               }`}
             >
-              Rate Card
+              Edit Rates
             </button>
           </>
         ) : (

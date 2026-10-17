@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PrintJob, User } from '../types';
-import { updateJobStatus, deletePrintJob, getRegisteredAdmins, registerAdminAccount, AdminAccount } from '../services/storage';
+import {
+  updateJobStatus,
+  deletePrintJob,
+  getRegisteredAdmins,
+  registerAdminAccount,
+  AdminAccount,
+  getRegisteredAccounts,
+  updateUserStatus,
+  RegisteredAccount,
+} from '../services/storage';
 import { soundManager } from '../utils/audio';
 import {
   Printer,
@@ -25,17 +34,30 @@ import {
   ShieldCheck,
   QrCode,
   Sparkles,
-  Users
+  Users,
+  Mail,
+  Copy,
+  Ban,
+  AlertTriangle,
+  UserCheck,
+  Shield,
+  ArrowRight
 } from 'lucide-react';
 
 interface AdminQueueProps {
   user: User;
   jobs: PrintJob[];
   onRefresh: () => void;
-  onNavigateToUsers?: () => void;
+  onNavigateToUsers?: (subTab?: 'students' | 'admins') => void;
+  onNavigateToRates?: () => void;
 }
 
-export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavigateToUsers }) => {
+export const AdminQueue: React.FC<AdminQueueProps> = ({
+  jobs,
+  onRefresh,
+  onNavigateToUsers,
+  onNavigateToRates,
+}) => {
   const [filter, setFilter] = useState<'all' | 'submitted' | 'processing' | 'ready' | 'completed'>('submitted');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<PrintJob | null>(null);
@@ -48,6 +70,18 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
   const [scannerInput, setScannerInput] = useState('');
   const [scanFeedback, setScanFeedback] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
+  // Quick Student Manager modal state
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [studentAccounts, setStudentAccounts] = useState<RegisteredAccount[]>(() => getRegisteredAccounts());
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentFilter, setStudentFilter] = useState<'all' | 'active' | 'disabled' | 'blocked'>('all');
+  const [copiedGmail, setCopiedGmail] = useState<string | null>(null);
+  const [studentFeedbackMsg, setStudentFeedbackMsg] = useState('');
+
+  const reloadStudents = () => {
+    setStudentAccounts(getRegisteredAccounts());
+  };
+
   // Add Admin modal state
   const [showAddAdminModal, setShowAddAdminModal] = useState(false);
   const [newAdminName, setNewAdminName] = useState('');
@@ -57,6 +91,40 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
   const [adminRegisterError, setAdminRegisterError] = useState('');
   const [adminRegisterSuccess, setAdminRegisterSuccess] = useState('');
   const [adminsList, setAdminsList] = useState<AdminAccount[]>(() => getRegisteredAdmins());
+
+  useEffect(() => {
+    const handleUsersUpdated = (e: any) => {
+      if (e.detail) {
+        setStudentAccounts(e.detail);
+      } else {
+        reloadStudents();
+      }
+    };
+    const handleAdminsUpdated = (e: any) => {
+      if (e.detail) {
+        setAdminsList(e.detail);
+      } else {
+        setAdminsList(getRegisteredAdmins());
+      }
+    };
+    window.addEventListener('xeroxic_users_updated', handleUsersUpdated);
+    window.addEventListener('xeroxic_admins_updated', handleAdminsUpdated);
+    return () => {
+      window.removeEventListener('xeroxic_users_updated', handleUsersUpdated);
+      window.removeEventListener('xeroxic_admins_updated', handleAdminsUpdated);
+    };
+  }, []);
+
+  const handleToggleStudentStatus = (
+    account: RegisteredAccount,
+    newStatus: 'active' | 'disabled' | 'blocked'
+  ) => {
+    updateUserStatus(account.id, newStatus);
+    reloadStudents();
+    const actionLabel = newStatus === 'active' ? 'Re-enabled' : newStatus === 'disabled' ? 'Disabled' : 'Blocked';
+    setStudentFeedbackMsg(`Student ${account.name} (${account.rollNumber}) status set to ${actionLabel}.`);
+    setTimeout(() => setStudentFeedbackMsg(''), 3500);
+  };
 
   const handleRegisterNewAdmin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -293,12 +361,12 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
 
           {onNavigateToUsers && (
             <button
-              onClick={onNavigateToUsers}
+              onClick={() => onNavigateToUsers('students')}
               className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#0067b8]/40 px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
               title="Manage registered students, view records, disable/block accounts"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Student Records</span>
+              <span>Manage Students</span>
             </button>
           )}
 
@@ -309,7 +377,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
               setAdminRegisterError('');
               setAdminRegisterSuccess('');
             }}
-            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#0067b8]/40 px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#107c10] border border-[#107c10]/40 px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
             title="Register a new counter operator / admin"
           >
             <UserPlus className="w-3.5 h-3.5" />
@@ -323,6 +391,123 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
             <RefreshCw className="w-3.5 h-3.5 text-[#0067b8]" />
             <span>Refresh</span>
           </button>
+        </div>
+      </div>
+
+      {/* Admin Management Hub - Quick Access Cards */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        {/* Card 1: Students Manager */}
+        <div className="bg-white border border-[#e1dfdd] rounded-xl p-4 shadow-sm hover:border-[#0067b8]/50 transition-all flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="w-8 h-8 rounded-lg bg-[#e6f2fb] text-[#0067b8] flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-semibold text-[#0067b8] bg-[#e6f2fb] px-2.5 py-0.5 rounded-full border border-[#0067b8]/20">
+                {studentAccounts.length} Registered
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-[#242424] mt-2.5">
+              Manage Students & Gmails
+            </h3>
+            <p className="text-xs text-[#605e5c] mt-1">
+              Search students by roll, copy Gmails, and toggle Active, Disabled, or Blocked access.
+            </p>
+          </div>
+          <div className="mt-3.5 pt-3 border-t border-[#edebe9] flex items-center space-x-2">
+            <button
+              onClick={() => {
+                setStudentAccounts(getRegisteredAccounts());
+                setShowStudentModal(true);
+              }}
+              className="flex-1 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Manage Students</span>
+            </button>
+            {onNavigateToUsers && (
+              <button
+                onClick={() => onNavigateToUsers('students')}
+                className="bg-white hover:bg-[#f3f2f1] text-[#242424] border border-[#8a8886] text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
+                title="Open Full Directory"
+              >
+                Full View
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Card 2: Add & Manage Admins */}
+        <div className="bg-white border border-[#e1dfdd] rounded-xl p-4 shadow-sm hover:border-[#107c10]/50 transition-all flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="w-8 h-8 rounded-lg bg-[#dff6dd] text-[#107c10] flex items-center justify-center">
+                <ShieldCheck className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-semibold text-[#107c10] bg-[#dff6dd] px-2.5 py-0.5 rounded-full border border-[#107c10]/20">
+                {adminsList.length} Operators
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-[#242424] mt-2.5">
+              Admin Operators & Staff
+            </h3>
+            <p className="text-xs text-[#605e5c] mt-1">
+              Add another counter admin operator with login ID & password, or manage staff access.
+            </p>
+          </div>
+          <div className="mt-3.5 pt-3 border-t border-[#edebe9] flex items-center space-x-2">
+            <button
+              onClick={() => {
+                setAdminsList(getRegisteredAdmins());
+                setShowAddAdminModal(true);
+                setAdminRegisterError('');
+                setAdminRegisterSuccess('');
+              }}
+              className="flex-1 bg-[#107c10] hover:bg-[#0e6b0e] text-white text-xs font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>+ Add Admin</span>
+            </button>
+            {onNavigateToUsers && (
+              <button
+                onClick={() => onNavigateToUsers('admins')}
+                className="bg-white hover:bg-[#f3f2f1] text-[#242424] border border-[#8a8886] text-xs font-semibold py-2 px-3 rounded-lg transition-colors"
+                title="Manage Admins"
+              >
+                All Admins
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Card 3: Rates & Pricing */}
+        <div className="bg-white border border-[#e1dfdd] rounded-xl p-4 shadow-sm hover:border-[#835c00]/50 transition-all flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="w-8 h-8 rounded-lg bg-[#fff4ce] text-[#835c00] flex items-center justify-center">
+                <Sparkles className="w-4 h-4" />
+              </div>
+              <span className="text-[11px] font-semibold text-[#835c00] bg-[#fff4ce] px-2.5 py-0.5 rounded-full border border-[#835c00]/20">
+                Custom Rates
+              </span>
+            </div>
+            <h3 className="text-sm font-semibold text-[#242424] mt-2.5">
+              Print Rates & Criteria
+            </h3>
+            <p className="text-xs text-[#605e5c] mt-1">
+              Configure B&W (₹2/sheet), Color, A3 multiplier, photo paper surcharge & urgent fee.
+            </p>
+          </div>
+          <div className="mt-3.5 pt-3 border-t border-[#edebe9] flex items-center space-x-2">
+            {onNavigateToRates && (
+              <button
+                onClick={onNavigateToRates}
+                className="w-full bg-[#f3f2f1] hover:bg-[#edebe9] text-[#242424] border border-[#d2d0ce] text-xs font-semibold py-2 px-3 rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-xs"
+              >
+                <span>Edit Pricing Rates →</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1189,8 +1374,22 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
 
               {/* Active Admins List */}
               <div className="mt-4 pt-3 border-t border-[#edebe9]">
-                <div className="text-[11px] font-semibold text-[#605e5c] uppercase mb-2">
-                  Active Registered Admins ({adminsList.length})
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[11px] font-semibold text-[#605e5c] uppercase">
+                    Active Registered Admins ({adminsList.length})
+                  </div>
+                  {onNavigateToUsers && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddAdminModal(false);
+                        onNavigateToUsers('admins');
+                      }}
+                      className="text-[11px] text-[#0067b8] hover:underline font-semibold flex items-center space-x-1"
+                    >
+                      <span>Manage Admins Console →</span>
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-1.5 max-h-32 overflow-y-auto">
                   {adminsList.map((a) => (
@@ -1210,6 +1409,193 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Student Management Modal inside Admin Block */}
+      {showStudentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-xl border border-[#8a8886] shadow-2xl max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-fadeIn">
+            <div className="p-4 bg-[#faf9f8] border-b border-[#edebe9] flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-full bg-[#e6f2fb] text-[#0067b8] flex items-center justify-center">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#242424]">Student Management & Gmail Records</h3>
+                  <p className="text-[11px] text-[#605e5c]">Search students, copy Gmail addresses, enable or disable/block accounts</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStudentModal(false)}
+                className="text-[#605e5c] hover:text-[#242424] p-1.5 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 flex-1 overflow-y-auto space-y-4">
+              {studentFeedbackMsg && (
+                <div className="p-3 bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] rounded-lg text-xs font-medium flex items-center space-x-2">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{studentFeedbackMsg}</span>
+                </div>
+              )}
+
+              {/* Search & Status Filters */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#797775]" />
+                  <input
+                    type="text"
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    placeholder="Search by name, roll number, or Gmail..."
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-[#8a8886] rounded-lg focus:outline-none focus:border-[#0067b8]"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-1.5 overflow-x-auto text-xs">
+                  {(['all', 'active', 'disabled', 'blocked'] as const).map((st) => (
+                    <button
+                      key={st}
+                      onClick={() => setStudentFilter(st)}
+                      className={`px-2.5 py-1.5 rounded-md font-semibold capitalize whitespace-nowrap transition-colors ${
+                        studentFilter === st
+                          ? 'bg-[#0067b8] text-white'
+                          : 'bg-[#f3f2f1] text-[#605e5c] hover:bg-[#edebe9]'
+                      }`}
+                    >
+                      {st} ({st === 'all' ? studentAccounts.length : studentAccounts.filter((a) => a.status === st).length})
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Students List */}
+              <div className="border border-[#e1dfdd] rounded-lg overflow-hidden">
+                <div className="max-h-96 overflow-y-auto divide-y divide-[#edebe9]">
+                  {studentAccounts
+                    .filter((acc) => {
+                      const q = studentSearch.toLowerCase();
+                      const match =
+                        acc.name.toLowerCase().includes(q) ||
+                        acc.rollNumber.toLowerCase().includes(q) ||
+                        acc.email.toLowerCase().includes(q);
+                      if (!match) return false;
+                      if (studentFilter === 'all') return true;
+                      return acc.status === studentFilter;
+                    })
+                    .map((acc) => (
+                      <div key={acc.id} className="p-3 hover:bg-[#faf9f8] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-semibold text-[#242424]">{acc.name}</span>
+                            <span className="bg-[#f3f2f1] text-[#605e5c] font-mono px-2 py-0.5 rounded text-[11px] font-semibold">
+                              {acc.rollNumber}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                                acc.status === 'active'
+                                  ? 'bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0]'
+                                  : acc.status === 'disabled'
+                                  ? 'bg-[#fff4ce] text-[#835c00] border border-[#f2c80f]'
+                                  : 'bg-[#fde7e9] text-[#a80000] border border-[#f19999]'
+                              }`}
+                            >
+                              {acc.status}
+                            </span>
+                          </div>
+
+                          {/* Gmail Badge with 1-Click Copy */}
+                          <div className="flex items-center space-x-2 text-[11px]">
+                            <Mail className="w-3.5 h-3.5 text-[#0067b8]" />
+                            <span className="font-mono text-[#242424] font-medium select-all">{acc.email}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(acc.email);
+                                setCopiedGmail(acc.email);
+                                setTimeout(() => setCopiedGmail(null), 2000);
+                              }}
+                              className="text-[10px] text-[#0067b8] hover:bg-[#e6f2fb] px-1.5 py-0.5 rounded border border-[#0067b8]/30 flex items-center space-x-1"
+                              title="Copy Gmail"
+                            >
+                              {copiedGmail === acc.email ? (
+                                <>
+                                  <Check className="w-3 h-3 text-[#107c10]" />
+                                  <span className="text-[#107c10]">Copied</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3 h-3" />
+                                  <span>Copy Gmail</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Status Toggle Actions */}
+                        <div className="flex items-center space-x-1.5 shrink-0">
+                          {acc.status === 'active' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStudentStatus(acc, 'disabled')}
+                                className="px-2.5 py-1 text-[11px] font-semibold rounded bg-[#fff4ce] hover:bg-[#fde399] text-[#835c00] border border-[#f2c80f] transition-colors"
+                              >
+                                Disable
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStudentStatus(acc, 'blocked')}
+                                className="px-2.5 py-1 text-[11px] font-semibold rounded bg-[#fde7e9] hover:bg-[#fad0d4] text-[#a80000] border border-[#f19999] transition-colors"
+                              >
+                                Block
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStudentStatus(acc, 'active')}
+                              className="px-3 py-1 text-[11px] font-semibold rounded bg-[#dff6dd] hover:bg-[#cef0cc] text-[#107c10] border border-[#a2e6a0] transition-colors flex items-center space-x-1"
+                            >
+                              <UserCheck className="w-3 h-3" />
+                              <span>Re-enable</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 bg-[#faf9f8] border-t border-[#edebe9] flex items-center justify-between">
+              {onNavigateToUsers && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowStudentModal(false);
+                    onNavigateToUsers('students');
+                  }}
+                  className="text-xs text-[#0067b8] hover:underline font-semibold flex items-center space-x-1"
+                >
+                  <span>Open Full Students Directory & History →</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowStudentModal(false)}
+                className="px-4 py-1.5 text-xs font-semibold bg-white border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] rounded-lg ml-auto"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
