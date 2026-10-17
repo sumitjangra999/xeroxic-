@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { PrintJob, User } from '../types';
 import { addPrintJobAsync, generateOrderId } from '../services/storage';
 import { mergeFilesToPdf, MAX_PAGE_COUNT, MAX_TOTAL_SIZE_BYTES } from '../utils/pdfMerger';
+import { openRazorpayCheckout } from '../services/razorpay';
+import { soundManager } from '../utils/audio';
 import { PDFDocument } from 'pdf-lib';
 import {
   Upload,
@@ -25,7 +27,10 @@ import {
   Plus,
   ExternalLink,
   Image as ImageIcon,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Sparkles,
+  Shield
 } from 'lucide-react';
 
 interface UploadAssignmentProps {
@@ -138,9 +143,10 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
   const [isUrgent, setIsUrgent] = useState(false);
   const [instructions, setInstructions] = useState('');
 
-  // Payment method state
-  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'counter'>('upi');
+  // Payment method state - Razorpay is default
+  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'counter'>('razorpay');
   const [utrNumber, setUtrNumber] = useState('');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -342,6 +348,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
       alert(`Please fix merging errors before proceeding:\n${mergeError}`);
       return;
     }
+    setPaymentError(null);
     setCurrentStep('payment');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -350,11 +357,90 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
     e.preventDefault();
     if (!mergedFile) return;
 
+    setPaymentError(null);
     setIsSubmitting(true);
 
     const randomToken = generateOrderId();
     const now = new Date().toISOString();
 
+    // 1. IF RAZORPAY: Launch Razorpay Standard Checkout Gateway
+    if (paymentMethod === 'razorpay') {
+      try {
+        const paymentResponse = await openRazorpayCheckout({
+          amountInRupees: totalCost,
+          orderToken: randomToken,
+          fileName: fileName || mergedFile.name,
+          pageCount: pageCount,
+          copies: copies,
+          studentName: user.name,
+          studentEmail: user.email,
+          studentPhone: user.phone || '+91 98765 43210',
+          studentRoll: user.studentId || '250222',
+          department: user.department || 'Student',
+        });
+
+        // Payment succeeded! Play victory sound chime
+        soundManager.playPaymentSuccessChime();
+
+        const newJob: PrintJob = {
+          id: randomToken,
+          studentId: user.id,
+          studentName: user.name,
+          studentRoll: user.studentId || '250222',
+          studentPhone: user.phone || '+91 98765 43210',
+          department: user.department || 'Campus Student',
+          fileName: fileName || mergedFile.name,
+          fileSize: fileSize || '1.5 MB',
+          fileType: 'application/pdf',
+          pageCount: pageCount,
+          pageRange: pageRangeMode === 'all' ? 'All Pages' : customRange.trim() || 'All Pages',
+          copies: copies,
+          colorMode: colorMode,
+          paperSize: paperSize,
+          paperType: paperType,
+          orientation: orientation,
+          sides: sides,
+          binding: 'none',
+          isUrgent: isUrgent,
+          instructions: pageRangeMode === 'custom' && customRange.trim()
+            ? `[Pages to print: ${customRange.trim()}] ${instructions.trim()}`
+            : instructions.trim(),
+          cost: totalCost,
+          status: 'submitted',
+          paymentMethod: 'razorpay',
+          razorpayPaymentId: paymentResponse.razorpay_payment_id,
+          paymentStatus: 'paid',
+          createdAt: now,
+          updatedAt: now,
+          pickupCounter: 'AIT Xerox Shop',
+          estimatedPickupTime: isUrgent ? '10-15 minutes' : '20-25 minutes',
+          statusHistory: [
+            {
+              status: 'submitted',
+              timestamp: now,
+              note: `Paid & Verified via Razorpay Gateway (Txn ID: ${paymentResponse.razorpay_payment_id}). Queued at AIT Xerox Shop.`,
+            },
+          ],
+        };
+
+        // ONLY AFTER SUCCESSFUL PAYMENT: Send to admin queue!
+        await addPrintJobAsync(newJob, mergedFile);
+        onJobCreated(newJob);
+        setSuccessJob(newJob);
+      } catch (err: any) {
+        console.warn('Razorpay checkout error / closed:', err);
+        if (err?.message === 'PAYMENT_DISMISSED') {
+          setPaymentError('Payment window was closed. Your print request has NOT been submitted to the admin.');
+        } else {
+          setPaymentError(err?.message || 'Payment could not be completed.');
+        }
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // 2. IF PAY AT COUNTER
     const newJob: PrintJob = {
       id: randomToken,
       studentId: user.id,
@@ -380,8 +466,8 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
         : instructions.trim(),
       cost: totalCost,
       status: 'submitted',
-      paymentMethod: paymentMethod,
-      utrNumber: utrNumber.trim() || undefined,
+      paymentMethod: 'counter',
+      paymentStatus: 'pending',
       createdAt: now,
       updatedAt: now,
       pickupCounter: 'AIT Xerox Shop',
@@ -390,9 +476,7 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
         {
           status: 'submitted',
           timestamp: now,
-          note: `Order placed online (${fileList.length} files merged into single PDF) via ${
-            paymentMethod === 'upi' ? 'UPI' : 'Pay at Counter'
-          }. Queued at AIT Xerox Shop.`,
+          note: 'Order placed online via Pay at Counter. Queued at AIT Xerox Shop.',
         },
       ],
     };
@@ -403,7 +487,6 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
       setSuccessJob(newJob);
     } catch (err) {
       console.error('Failed to submit print job:', err);
-      // Still show success as local job is persisted
       onJobCreated(newJob);
       setSuccessJob(newJob);
     } finally {
@@ -411,31 +494,145 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
     }
   };
 
+  // Visual Step Progress Bar
+  const renderStepIndicator = () => (
+    <div className="max-w-3xl mx-auto mb-8 px-4">
+      <div className="relative flex items-center justify-between">
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 h-1 w-full bg-[#e1dfdd] rounded-full z-0" />
+        <div
+          className="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-[#0067b8] rounded-full z-0 transition-all duration-500 ease-out"
+          style={{
+            width: currentStep === 'upload' ? '0%' : currentStep === 'configure' ? '50%' : '100%',
+          }}
+        />
+
+        {/* Step 1 */}
+        <div
+          onClick={() => setCurrentStep('upload')}
+          className={`relative z-10 flex flex-col items-center cursor-pointer transition-all duration-300 ${
+            currentStep === 'upload' ? 'scale-105' : ''
+          }`}
+        >
+          <div
+            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition-all duration-300 ${
+              fileList.length > 0 && currentStep !== 'upload'
+                ? 'bg-[#107c10] text-white ring-2 ring-[#107c10]/20'
+                : currentStep === 'upload'
+                ? 'bg-[#0067b8] text-white ring-4 ring-[#0067b8]/20'
+                : 'bg-white text-[#605e5c] border border-[#d2d0ce]'
+            }`}
+          >
+            {fileList.length > 0 && currentStep !== 'upload' ? (
+              <Check className="w-4 h-4 stroke-[2.5]" />
+            ) : (
+              '1'
+            )}
+          </div>
+          <span
+            className={`mt-1.5 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+              currentStep === 'upload' ? 'text-[#0067b8]' : 'text-[#605e5c]'
+            }`}
+          >
+            1. Upload Documents
+          </span>
+        </div>
+
+        {/* Step 2 */}
+        <div
+          onClick={() => {
+            if (fileList.length > 0) setCurrentStep('configure');
+          }}
+          className={`relative z-10 flex flex-col items-center transition-all duration-300 ${
+            fileList.length > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+          } ${currentStep === 'configure' ? 'scale-105' : ''}`}
+        >
+          <div
+            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition-all duration-300 ${
+              currentStep === 'payment'
+                ? 'bg-[#107c10] text-white ring-2 ring-[#107c10]/20'
+                : currentStep === 'configure'
+                ? 'bg-[#0067b8] text-white ring-4 ring-[#0067b8]/20'
+                : 'bg-white text-[#605e5c] border border-[#d2d0ce]'
+            }`}
+          >
+            {currentStep === 'payment' ? (
+              <Check className="w-4 h-4 stroke-[2.5]" />
+            ) : (
+              '2'
+            )}
+          </div>
+          <span
+            className={`mt-1.5 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+              currentStep === 'configure' ? 'text-[#0067b8]' : 'text-[#605e5c]'
+            }`}
+          >
+            2. Configure Print
+          </span>
+        </div>
+
+        {/* Step 3 */}
+        <div
+          onClick={() => {
+            if (fileList.length > 0) handleProceedToPayment();
+          }}
+          className={`relative z-10 flex flex-col items-center transition-all duration-300 ${
+            fileList.length > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+          } ${currentStep === 'payment' ? 'scale-105' : ''}`}
+        >
+          <div
+            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition-all duration-300 ${
+              currentStep === 'payment'
+                ? 'bg-[#0067b8] text-white ring-4 ring-[#0067b8]/20'
+                : 'bg-white text-[#605e5c] border border-[#d2d0ce]'
+            }`}
+          >
+            3
+          </div>
+          <span
+            className={`mt-1.5 text-[11px] font-semibold whitespace-nowrap transition-colors ${
+              currentStep === 'payment' ? 'text-[#0067b8]' : 'text-[#605e5c]'
+            }`}
+          >
+            3. Razorpay & Print
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+
   // SUCCESS / CONFIRMATION SCREEN
   if (successJob) {
     return (
-      <div className="max-w-3xl mx-auto py-10 px-4">
-        <div className="bg-white border border-[#e1dfdd] rounded-lg p-8 shadow-sm text-left">
-          <div className="flex items-center space-x-3 pb-5 border-b border-[#edebe9]">
-            <div className="w-12 h-12 rounded-full bg-[#107c10]/15 text-[#107c10] flex items-center justify-center">
-              <Check className="w-6 h-6 stroke-[2.5]" />
+      <div className="max-w-3xl mx-auto py-10 px-4 animate-slideUp">
+        <div className="bg-white border border-[#e1dfdd] rounded-xl p-8 shadow-sm text-left">
+          <div className="flex items-center space-x-3.5 pb-5 border-b border-[#edebe9]">
+            <div className="w-12 h-12 rounded-full bg-[#107c10]/15 text-[#107c10] flex items-center justify-center animate-scaleIn animate-pulseGreen">
+              <Check className="w-6 h-6 stroke-[3]" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-[#242424]">Print Request Received!</h2>
-              <p className="text-xs text-[#605e5c]">
-                Your single merged PDF has been sent to the AIT Xerox operator desk.
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-[#242424]">Print Request Received!</h2>
+                {successJob.paymentMethod === 'razorpay' && (
+                  <span className="text-[11px] bg-[#107c10]/15 text-[#107c10] font-bold px-2.5 py-0.5 rounded-full border border-[#107c10]/30 flex items-center space-x-1">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>Paid via Razorpay</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[#605e5c] mt-0.5">
+                Your single merged PDF has been sent to the AIT Xerox operator desk and queued for printing.
               </p>
             </div>
           </div>
 
           {/* Token ID Highlight */}
-          <div className="my-6 p-5 bg-[#f3f2f1] border border-[#e1dfdd] rounded-md grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="my-6 p-5 bg-[#f3f2f1] border border-[#e1dfdd] rounded-xl grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Your Token ID</div>
               <div className="text-2xl font-bold text-[#0067b8] mt-1 tracking-wider font-mono">
                 {successJob.id}
               </div>
-              <div className="text-[11px] text-[#797775] mt-0.5">Show this token at pickup</div>
+              <div className="text-[11px] text-[#797775] mt-0.5">Show this token at pickup counter</div>
             </div>
             <div>
               <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Pickup Counter</div>
@@ -445,13 +642,15 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
               <div className="text-[11px] text-[#797775]">Library Ground Floor</div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Estimated Time</div>
+              <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Payment & Status</div>
               <div className="text-base font-semibold text-[#107c10] mt-1">
-                {successJob.estimatedPickupTime}
+                ₹{successJob.cost}.00 {successJob.paymentMethod === 'razorpay' ? '(Paid)' : '(Pay at Counter)'}
               </div>
-              <div className="text-[11px] text-[#797775]">
-                Amount: ₹{successJob.cost} ({successJob.paymentMethod === 'upi' ? 'UPI' : 'Pay at Counter'})
-              </div>
+              {successJob.razorpayPaymentId && (
+                <div className="text-[10px] text-[#605e5c] font-mono mt-0.5 truncate" title={successJob.razorpayPaymentId}>
+                  Txn: {successJob.razorpayPaymentId}
+                </div>
+              )}
             </div>
           </div>
 
@@ -459,25 +658,25 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
           <div className="space-y-3 text-xs text-[#323130] pb-6 border-b border-[#edebe9]">
             <div className="font-semibold text-sm text-[#242424]">Print Specifications</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded">
+              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded-lg">
                 <span className="text-[#605e5c] block text-[11px]">Merged PDF:</span>
                 <span className="font-medium truncate block" title={successJob.fileName}>
                   {successJob.fileName}
                 </span>
               </div>
-              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded">
+              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded-lg">
                 <span className="text-[#605e5c] block text-[11px]">Pages & Copies:</span>
                 <span className="font-medium">
                   {successJob.pageCount} pgs × {successJob.copies} {successJob.copies > 1 ? 'copies' : 'copy'}
                 </span>
               </div>
-              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded">
+              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded-lg">
                 <span className="text-[#605e5c] block text-[11px]">Color & Sides:</span>
                 <span className="font-medium">
-                  {successJob.colorMode === 'color' ? 'Color' : 'B&W'} ({successJob.sides === 'double' ? 'Duplex' : 'Single Sided'})
+                  {successJob.colorMode === 'color' ? 'Full Color' : 'B&W'} ({successJob.sides === 'double' ? 'Duplex' : 'Single Sided'})
                 </span>
               </div>
-              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded">
+              <div className="bg-[#faf9f8] p-2.5 border border-[#e1dfdd] rounded-lg">
                 <span className="text-[#605e5c] block text-[11px]">Paper Type:</span>
                 <span className="font-medium">
                   {successJob.paperType === 'photo' ? 'Photo Paper' : 'Plain Paper'}
@@ -493,14 +692,14 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                 setSuccessJob(null);
                 handleClearAll();
               }}
-              className="w-full sm:w-auto px-4 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] text-xs font-semibold rounded transition-colors"
+              className="w-full sm:w-auto px-4 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] text-xs font-semibold rounded-lg transition-colors"
             >
               Upload Another Assignment
             </button>
             <button
               type="button"
               onClick={() => onJobCreated(successJob)}
-              className="w-full sm:w-auto px-5 py-2 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded transition-colors flex items-center justify-center space-x-1.5 shadow-sm"
+              className="w-full sm:w-auto px-5 py-2 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center space-x-1.5 shadow-sm"
             >
               <Clock className="w-4 h-4" />
               <span>Track Live Status</span>
@@ -514,7 +713,8 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
   // STEP 3: PAYMENT PAGE
   if (currentStep === 'payment') {
     return (
-      <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 text-left">
+      <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 text-left animate-slideUp">
+        {renderStepIndicator()}
         {/* Navigation Breadcrumb */}
         <div className="flex items-center space-x-2 text-xs text-[#605e5c] mb-4">
           <button
@@ -546,91 +746,60 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                   Select Payment Method
                 </h2>
 
-                {/* Option 1: Instant UPI QR Code */}
+                {/* Option 1: Razorpay Instant Payment Gateway */}
                 <div
-                  onClick={() => setPaymentMethod('upi')}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                    paymentMethod === 'upi'
-                      ? 'border-[#0067b8] bg-[#e6f2fb]/30'
+                  onClick={() => setPaymentMethod('razorpay')}
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${
+                    paymentMethod === 'razorpay'
+                      ? 'border-[#0067b8] bg-[#e6f2fb]/40 shadow-sm ring-2 ring-[#0067b8]/20'
                       : 'border-[#edebe9] hover:border-[#a19f9d] bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-md bg-[#0067b8]/10 text-[#0067b8] flex items-center justify-center">
-                        <QrCode className="w-5 h-5" />
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-11 h-11 rounded-lg bg-[#0067b8] text-white flex items-center justify-center shadow-sm">
+                        <CreditCard className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="text-sm font-semibold text-[#242424]">
-                          Instant UPI Payment (QR Code)
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-semibold text-[#242424]">
+                            Razorpay Online Gateway
+                          </span>
+                          <span className="text-[10px] bg-[#107c10]/15 text-[#107c10] font-bold px-2 py-0.5 rounded-full border border-[#107c10]/30">
+                            Recommended
+                          </span>
                         </div>
                         <div className="text-xs text-[#605e5c] mt-0.5">
-                          Pay using GPay, PhonePe, Paytm, or BHIM
+                          Instant UPI (GPay, PhonePe, Paytm), Debit/Credit Cards & Netbanking
                         </div>
                       </div>
                     </div>
-                    {paymentMethod === 'upi' && <Check className="w-5 h-5 text-[#0067b8]" />}
+                    {paymentMethod === 'razorpay' && (
+                      <div className="w-5 h-5 rounded-full bg-[#0067b8] text-white flex items-center justify-center">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                    )}
                   </div>
 
-                  {paymentMethod === 'upi' && (
-                    <div className="mt-4 pt-4 border-t border-[#edebe9] space-y-3">
-                      <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 border border-[#e1dfdd] rounded-md">
-                        {/* Mock UPI QR Graphic */}
-                        <div className="w-32 h-32 shrink-0 bg-white border border-[#242424] p-2 flex flex-col items-center justify-center rounded">
-                          <svg className="w-full h-full" viewBox="0 0 100 100" fill="none">
-                            <rect width="100" height="100" fill="#ffffff" />
-                            <rect x="10" y="10" width="25" height="25" fill="#000" />
-                            <rect x="15" y="15" width="15" height="15" fill="#fff" />
-                            <rect x="18" y="18" width="9" height="9" fill="#000" />
-
-                            <rect x="65" y="10" width="25" height="25" fill="#000" />
-                            <rect x="70" y="15" width="15" height="15" fill="#fff" />
-                            <rect x="73" y="18" width="9" height="9" fill="#000" />
-
-                            <rect x="10" y="65" width="25" height="25" fill="#000" />
-                            <rect x="15" y="70" width="15" height="15" fill="#fff" />
-                            <rect x="18" y="73" width="9" height="9" fill="#000" />
-
-                            <rect x="42" y="12" width="6" height="6" fill="#000" />
-                            <rect x="52" y="12" width="6" height="6" fill="#000" />
-                            <rect x="42" y="22" width="6" height="6" fill="#000" />
-                            <rect x="42" y="32" width="16" height="6" fill="#000" />
-                            <rect x="12" y="42" width="16" height="6" fill="#000" />
-                            <rect x="32" y="42" width="6" height="16" fill="#000" />
-                            <rect x="42" y="42" width="16" height="16" fill="#0067b8" />
-                            <rect x="62" y="42" width="6" height="6" fill="#000" />
-                            <rect x="72" y="42" width="16" height="6" fill="#000" />
-                            <rect x="62" y="52" width="16" height="6" fill="#000" />
-                            <rect x="42" y="62" width="6" height="16" fill="#000" />
-                            <rect x="52" y="72" width="16" height="6" fill="#000" />
-                            <rect x="72" y="62" width="16" height="16" fill="#000" />
-                          </svg>
+                  {paymentMethod === 'razorpay' && (
+                    <div className="mt-4 pt-4 border-t border-[#edebe9] space-y-3 animate-fadeIn">
+                      <div className="bg-white p-3.5 border border-[#e1dfdd] rounded-lg space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-[#605e5c]">Amount to Pay:</span>
+                          <span className="text-base font-bold text-[#0067b8]">₹{totalCost}.00</span>
                         </div>
-
-                        <div className="text-xs space-y-1.5 flex-1">
-                          <div className="text-[11px] font-semibold text-[#605e5c] uppercase">Scan & Pay</div>
-                          <div className="text-base font-bold text-[#0067b8]">₹{totalCost}.00</div>
-                          <div className="text-xs text-[#242424]">
-                            UPI ID: <span className="font-mono font-semibold">ait.xerox@upi</span>
-                          </div>
-                          <div className="text-[11px] text-[#605e5c] flex items-center space-x-1 pt-1">
+                        <div className="flex items-center justify-between text-[11px] text-[#605e5c] pt-1 border-t border-[#f3f2f1]">
+                          <span className="flex items-center space-x-1">
                             <ShieldCheck className="w-3.5 h-3.5 text-[#107c10]" />
-                            <span>Verified AIT Xerox Shop</span>
-                          </div>
+                            <span>Official Razorpay Standard Checkout</span>
+                          </span>
+                          <span className="font-mono text-[10px] text-[#797775]">Test Mode (rzp_test_Te...)</span>
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-medium text-[#374151] mb-1">
-                          UTR / Transaction Ref No. (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={utrNumber}
-                          onChange={(e) => setUtrNumber(e.target.value)}
-                          placeholder="e.g. 429183019283 (from UPI app)"
-                          className="w-full px-3 py-2 text-xs border border-[#8a8886] rounded focus:outline-none focus:border-[#0067b8]"
-                        />
+                      <div className="p-3 bg-[#e6f2fb]/60 border border-[#0067b8]/20 rounded-lg text-xs text-[#0067b8] flex items-center space-x-2">
+                        <Sparkles className="w-4 h-4 shrink-0 text-[#0067b8]" />
+                        <span>After successful payment in the Razorpay window, your print request is automatically verified and immediately sent to the Xerox counter.</span>
                       </div>
                     </div>
                   )}
@@ -639,15 +808,15 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                 {/* Option 2: Pay at Counter */}
                 <div
                   onClick={() => setPaymentMethod('counter')}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all duration-300 ${
                     paymentMethod === 'counter'
-                      ? 'border-[#0067b8] bg-[#e6f2fb]/30'
+                      ? 'border-[#0067b8] bg-[#e6f2fb]/40 shadow-sm ring-2 ring-[#0067b8]/20'
                       : 'border-[#edebe9] hover:border-[#a19f9d] bg-white'
                   }`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-md bg-[#107c10]/10 text-[#107c10] flex items-center justify-center">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-11 h-11 rounded-md bg-[#107c10]/10 text-[#107c10] flex items-center justify-center">
                         <Banknote className="w-5 h-5" />
                       </div>
                       <div>
@@ -655,17 +824,21 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                           Pay at Counter on Pickup
                         </div>
                         <div className="text-xs text-[#605e5c] mt-0.5">
-                          Pay cash or scan shop QR when collecting printed sheets
+                          Pay cash or scan counter QR when collecting printed sheets
                         </div>
                       </div>
                     </div>
-                    {paymentMethod === 'counter' && <Check className="w-5 h-5 text-[#0067b8]" />}
+                    {paymentMethod === 'counter' && (
+                      <div className="w-5 h-5 rounded-full bg-[#0067b8] text-white flex items-center justify-center">
+                        <Check className="w-3.5 h-3.5 stroke-[3]" />
+                      </div>
+                    )}
                   </div>
 
                   {paymentMethod === 'counter' && (
-                    <div className="mt-3 pt-3 border-t border-[#edebe9] text-xs text-[#605e5c] space-y-1">
+                    <div className="mt-3 pt-3 border-t border-[#edebe9] text-xs text-[#605e5c] space-y-1 animate-fadeIn">
                       <p>
-                        Your order will be printed and kept ready at <strong>AIT Xerox Shop</strong> (Library Ground Floor).
+                        Your order will be queued at <strong>AIT Xerox Shop</strong> (Library Ground Floor).
                       </p>
                       <p className="text-[#107c10] font-medium">
                         Pay ₹{totalCost}.00 in cash or via UPI when handing your Token ID.
@@ -673,6 +846,17 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                     </div>
                   )}
                 </div>
+
+                {/* Error Banner if user dismissed or payment failed */}
+                {paymentError && (
+                  <div className="p-3.5 bg-[#fde7e9] border border-[#a80000]/30 rounded-lg text-xs text-[#a80000] flex items-start space-x-2 animate-fadeIn">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-[#a80000]" />
+                    <div>
+                      <span className="font-semibold block">Payment Notice</span>
+                      <span>{paymentError}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -729,17 +913,22 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-2.5 px-4 bg-[#0067b8] hover:bg-[#005da6] active:bg-[#004e8c] text-white text-xs font-semibold rounded transition-colors flex items-center justify-center space-x-2 shadow-sm disabled:bg-[#a19f9d]"
+                    className="w-full py-3 px-4 bg-[#0067b8] hover:bg-[#005da6] active:bg-[#004e8c] text-white text-xs font-semibold rounded-lg transition-all duration-200 flex items-center justify-center space-x-2 shadow-sm disabled:bg-[#a19f9d]"
                   >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Uploading Merged PDF & Sending...</span>
+                        <span>Opening Razorpay Secure Checkout...</span>
+                      </>
+                    ) : paymentMethod === 'razorpay' ? (
+                      <>
+                        <Lock className="w-4 h-4" />
+                        <span>Pay ₹{totalCost}.00 via Razorpay</span>
                       </>
                     ) : (
                       <>
                         <Check className="w-4 h-4 stroke-[2.5]" />
-                        <span>Confirm & Send to Print Queue (₹{totalCost})</span>
+                        <span>Submit Request (Pay at Counter ₹{totalCost})</span>
                       </>
                     )}
                   </button>
@@ -762,7 +951,8 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
 
   // STEP 1 & STEP 2: UPLOAD & CONFIGURE
   return (
-    <div className="max-w-5xl mx-auto py-6 px-4 sm:px-6 text-left">
+    <div className="max-w-5xl mx-auto py-6 px-4 sm:px-6 text-left animate-slideUp">
+      {renderStepIndicator()}
       {/* Title section */}
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-[#242424] tracking-tight">

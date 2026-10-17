@@ -1,9 +1,10 @@
-// Clean Web Audio API sound generator for Xeroxic notifications
-// No external mp3 files required, works offline and in production without 404/CORS issues
+// Clean, high-performance Web Audio API sound generator for Xeroxic notifications
+// Pre-warmed audio context eliminates browser autoplay latency and delivers instant audio
 
 class SoundManager {
   private ctx: AudioContext | null = null;
   private soundEnabled: boolean = true;
+  private isPrewarmed: boolean = false;
 
   constructor() {
     try {
@@ -13,6 +14,24 @@ class SoundManager {
       }
     } catch {
       this.soundEnabled = true;
+    }
+
+    // Auto-prewarm AudioContext on first user interaction anywhere in the window
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        this.getAudioContext();
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+        this.isPrewarmed = true;
+        window.removeEventListener('pointerdown', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+        window.removeEventListener('click', unlockAudio);
+      };
+
+      window.addEventListener('pointerdown', unlockAudio, { passive: true, once: true });
+      window.addEventListener('keydown', unlockAudio, { passive: true, once: true });
+      window.addEventListener('click', unlockAudio, { passive: true, once: true });
     }
   }
 
@@ -45,66 +64,116 @@ class SoundManager {
     } catch {}
   }
 
-  // Bell / Counter Chime (Ding-Dong) for Admin when new order arrives
+  private lastBellTime: number = 0;
+
+  /**
+   * Instant Ding-Dong Shop Bell for Xerox Operator Desk
+   * Fast attack, zero latency, clear two-tone chime
+   */
   public playNewOrderBell(): void {
     if (!this.soundEnabled) return;
+    const currentTimeMs = Date.now();
+    if (currentTimeMs - this.lastBellTime < 800) return; // Prevent double ringing
+    this.lastBellTime = currentTimeMs;
+
     const ctx = this.getAudioContext();
     if (!ctx) return;
 
     try {
       const now = ctx.currentTime;
 
-      // Primary Ding (880 Hz - High A)
+      // 1. "DING" (High resonant strike - 987.77 Hz B5 + 1318.5 Hz E6 harmonic)
       const osc1 = ctx.createOscillator();
+      const osc1Harmonic = ctx.createOscillator();
       const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(880, now);
-      osc1.frequency.exponentialRampToValueAtTime(440, now + 0.8);
 
-      gain1.gain.setValueAtTime(0.35, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(987.77, now);
+      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.6);
+
+      osc1Harmonic.type = 'triangle';
+      osc1Harmonic.frequency.setValueAtTime(1318.5, now);
+      osc1Harmonic.frequency.exponentialRampToValueAtTime(1174.66, now + 0.5);
+
+      gain1.gain.setValueAtTime(0.4, now);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.7);
 
       osc1.connect(gain1);
+      osc1Harmonic.connect(gain1);
       gain1.connect(ctx.destination);
 
       osc1.start(now);
-      osc1.stop(now + 0.8);
+      osc1Harmonic.start(now);
+      osc1.stop(now + 0.7);
+      osc1Harmonic.stop(now + 0.7);
 
-      // Harmonic chime (1320 Hz)
+      // 2. "DONG" (Deep counter chime - 783.99 Hz G5 + 523.25 Hz C5 resonance at +140ms)
+      const dongTime = now + 0.14;
       const osc2 = ctx.createOscillator();
+      const osc2Body = ctx.createOscillator();
       const gain2 = ctx.createGain();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(1320, now + 0.12);
-      osc2.frequency.exponentialRampToValueAtTime(660, now + 0.9);
 
-      gain2.gain.setValueAtTime(0.25, now + 0.12);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(783.99, dongTime);
+      osc2.frequency.exponentialRampToValueAtTime(659.25, dongTime + 0.9);
+
+      osc2Body.type = 'triangle';
+      osc2Body.frequency.setValueAtTime(523.25, dongTime);
+      osc2Body.frequency.exponentialRampToValueAtTime(440, dongTime + 0.9);
+
+      gain2.gain.setValueAtTime(0.45, dongTime);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, dongTime + 1.1);
 
       osc2.connect(gain2);
+      osc2Body.connect(gain2);
       gain2.connect(ctx.destination);
 
-      osc2.start(now + 0.12);
-      osc2.stop(now + 0.9);
-
-      // Third ping for clear bell resonance (1760 Hz)
-      const osc3 = ctx.createOscillator();
-      const gain3 = ctx.createGain();
-      osc3.type = 'sine';
-      osc3.frequency.setValueAtTime(1760, now + 0.25);
-      gain3.gain.setValueAtTime(0.2, now + 0.25);
-      gain3.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
-
-      osc3.connect(gain3);
-      gain3.connect(ctx.destination);
-
-      osc3.start(now + 0.25);
-      osc3.stop(now + 1.1);
+      osc2.start(dongTime);
+      osc2Body.start(dongTime);
+      osc2.stop(dongTime + 1.1);
+      osc2Body.stop(dongTime + 1.1);
     } catch (err) {
       console.warn('Audio playback error:', err);
     }
   }
 
-  // Pleasant notification chime for Student when order becomes ready
+  /**
+   * Crisp uplifting chime when Razorpay payment succeeds
+   */
+  public playPaymentSuccessChime(): void {
+    if (!this.soundEnabled) return;
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const now = ctx.currentTime;
+      const notes = [587.33, 739.99, 880, 1174.66]; // D5, F#5, A5, D6 triumphant arpeggio
+
+      notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const startTime = now + idx * 0.08;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, startTime);
+
+        gain.gain.setValueAtTime(0.3, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.45);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(startTime + 0.45);
+      });
+    } catch (err) {
+      console.warn('Payment success chime error:', err);
+    }
+  }
+
+  /**
+   * Notification chime for Student when print job is marked Ready for pickup
+   */
   public playReadyChime(): void {
     if (!this.soundEnabled) return;
     const ctx = this.getAudioContext();
@@ -123,13 +192,13 @@ class SoundManager {
         osc.frequency.setValueAtTime(freq, startTime);
 
         gain.gain.setValueAtTime(0.25, startTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.5);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.55);
 
         osc.connect(gain);
         gain.connect(ctx.destination);
 
         osc.start(startTime);
-        osc.stop(startTime + 0.5);
+        osc.stop(startTime + 0.55);
       });
     } catch (err) {
       console.warn('Ready chime error:', err);

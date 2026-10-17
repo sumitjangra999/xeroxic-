@@ -661,8 +661,12 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
                       </div>
                       <div className="p-3 bg-[#f3f2f1] border border-[#e1dfdd] rounded-lg">
                         <span className="text-[#605e5c] block text-[11px]">Payment Method</span>
-                        <span className="font-semibold text-[#242424] capitalize">
-                          {job.paymentMethod === 'upi' ? 'UPI Online' : 'Pay at Counter'}
+                        <span className="font-semibold text-[#242424]">
+                          {job.paymentMethod === 'razorpay'
+                            ? 'Razorpay Online (Paid)'
+                            : job.paymentMethod === 'upi'
+                            ? 'UPI Online'
+                            : 'Pay at Counter'}
                         </span>
                       </div>
                       <div className="p-3 bg-[#f3f2f1] border border-[#e1dfdd] rounded-lg">

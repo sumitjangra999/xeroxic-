@@ -71,10 +71,42 @@ export function getStoredJobs(): PrintJob[] {
   }
 }
 
-export function saveStoredJobs(jobs: PrintJob[]): void {
+let liveSyncChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    liveSyncChannel = new BroadcastChannel('xeroxic_live_sync');
+    liveSyncChannel.onmessage = (event) => {
+      if (event.data?.type === 'jobs_updated' && event.data.jobs) {
+        window.dispatchEvent(new CustomEvent('xeroxic_jobs_updated', { detail: event.data.jobs }));
+      }
+      if (event.data?.type === 'new_job' && event.data.job) {
+        window.dispatchEvent(new CustomEvent('xeroxic_new_order_placed', { detail: event.data.job }));
+      }
+    };
+  }
+} catch (e) {
+  console.warn('BroadcastChannel error:', e);
+}
+
+export function broadcastJobsSync(jobs: PrintJob[], newJob?: PrintJob) {
+  try {
+    if (liveSyncChannel) {
+      liveSyncChannel.postMessage({ type: 'jobs_updated', jobs });
+      if (newJob) {
+        liveSyncChannel.postMessage({ type: 'new_job', job: newJob });
+      }
+    }
+  } catch {}
+}
+
+export function saveStoredJobs(jobs: PrintJob[], newJob?: PrintJob): void {
   try {
     localStorage.setItem(STORAGE_KEY_JOBS, JSON.stringify(jobs));
     window.dispatchEvent(new CustomEvent('xeroxic_jobs_updated', { detail: jobs }));
+    if (newJob) {
+      window.dispatchEvent(new CustomEvent('xeroxic_new_order_placed', { detail: newJob }));
+    }
+    broadcastJobsSync(jobs, newJob);
   } catch (e) {
     console.error('Error saving jobs to localStorage', e);
   }
@@ -489,30 +521,31 @@ export function saveStoredUser(user: User | null): void {
 }
 
 export async function addPrintJobAsync(job: PrintJob, file?: File | null): Promise<boolean> {
-  // Update local storage first for instant responsiveness
+  // Update local storage and broadcast to other tabs immediately for instant (<2ms) responsiveness
   const jobs = getStoredJobs();
   const updated = [job, ...jobs.filter((j) => j.id !== job.id)];
-  saveStoredJobs(updated);
+  saveStoredJobs(updated, job);
+
+  // Instantly insert into Supabase so admin receives the order & chime right away
+  insertJobToSupabase(job, job.fileUrl).catch((err) =>
+    console.warn('Fast Supabase insert warning:', err)
+  );
 
   try {
-    let fileUrl: string | undefined = undefined;
     if (file) {
       const uploadedUrl = await uploadAssignmentFile(file, job.id);
       if (uploadedUrl) {
-        fileUrl = uploadedUrl;
         job.fileUrl = uploadedUrl;
         const currentJobs = getStoredJobs();
-        saveStoredJobs(currentJobs.map((j) => (j.id === job.id ? { ...j, fileUrl: uploadedUrl } : j)));
+        const withFile = currentJobs.map((j) => (j.id === job.id ? { ...j, fileUrl: uploadedUrl } : j));
+        saveStoredJobs(withFile);
+        // Update file_url in Supabase
+        supabase.from('print_jobs').update({ file_url: uploadedUrl }).eq('id', job.id).then();
       }
-    }
-    const inserted = await insertJobToSupabase(job, fileUrl);
-    if (!inserted) {
-      console.warn('Supabase insert failed with fileUrl, retrying without fileUrl...');
-      await insertJobToSupabase(job, undefined);
     }
     return true;
   } catch (err) {
-    console.error('Error sending job to Supabase:', err);
+    console.error('Error uploading file for job:', err);
     return false;
   }
 }

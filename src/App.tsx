@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, PrintJob } from './types';
 import {
   getStoredUser,
@@ -9,6 +9,7 @@ import {
   DEMO_STUDENT,
 } from './services/storage';
 import { subscribeToLiveJobs } from './services/supabase';
+import { soundManager } from './utils/audio';
 import { Navbar } from './components/Navbar';
 import { HomeView } from './components/HomeView';
 import { LoginPage } from './components/LoginPage';
@@ -34,7 +35,25 @@ export function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab, showSignInModal]);
 
-  // Supabase initial sync, live subscription, and background 5s poller
+  // Track known submitted job IDs to sound the bell when a new request arrives
+  const knownSubmittedIdsRef = useRef<Set<string>>(
+    new Set(jobs.filter((j) => j.status === 'submitted').map((j) => j.id))
+  );
+
+  useEffect(() => {
+    const currentSubmitted = jobs.filter((j) => j.status === 'submitted');
+    const newIncoming = currentSubmitted.filter(
+      (j) => !knownSubmittedIdsRef.current.has(j.id)
+    );
+
+    if (newIncoming.length > 0 && currentUser?.role === 'admin') {
+      soundManager.playNewOrderBell();
+    }
+
+    knownSubmittedIdsRef.current = new Set(currentSubmitted.map((j) => j.id));
+  }, [jobs, currentUser]);
+
+  // Supabase initial sync, live subscription, and fast 1.5s background poller for instant order alerts
   useEffect(() => {
     const doSync = async () => {
       try {
@@ -49,7 +68,7 @@ export function App() {
     };
 
     doSync();
-    const interval = setInterval(doSync, 5000);
+    const interval = setInterval(doSync, 1500);
 
     const unsubscribe = subscribeToLiveJobs(async () => {
       await doSync();
@@ -77,16 +96,24 @@ export function App() {
       }
     };
 
+    const handleNewOrderPlaced = (e: any) => {
+      if (currentUser?.role === 'admin') {
+        soundManager.playNewOrderBell();
+      }
+    };
+
     window.addEventListener('xeroxic_jobs_updated', handleJobsUpdated);
     window.addEventListener('xeroxic_user_updated', handleUserUpdated);
+    window.addEventListener('xeroxic_new_order_placed', handleNewOrderPlaced);
     window.addEventListener('storage', handleJobsUpdated);
 
     return () => {
       window.removeEventListener('xeroxic_jobs_updated', handleJobsUpdated);
       window.removeEventListener('xeroxic_user_updated', handleUserUpdated);
+      window.removeEventListener('xeroxic_new_order_placed', handleNewOrderPlaced);
       window.removeEventListener('storage', handleJobsUpdated);
     };
-  }, []);
+  }, [currentUser]);
 
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -100,7 +127,7 @@ export function App() {
     setTimeout(() => {
       setActiveTab(target);
       setIsTransitioning(false);
-    }, 160);
+    }, 120);
   };
 
   const handleLogin = (user: User) => {
@@ -166,16 +193,14 @@ export function App() {
         />
 
         <main className="pb-12">
-          {isTransitioning ? (
-            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3.5 animate-fadeIn">
-              <div className="w-9 h-9 border-[3px] border-[#0067b8]/20 border-t-[#0067b8] rounded-full animate-spin" />
-              <div className="text-xs font-semibold text-[#605e5c] tracking-wide">
-                Loading workspace...
-              </div>
-            </div>
-          ) : (
-            <div className="animate-fadeIn">
-              {activeTab === 'home' && currentUser?.role !== 'admin' && (
+          <div
+            className={`transition-all duration-200 ease-out ${
+              isTransitioning
+                ? 'opacity-20 scale-[0.99] pointer-events-none'
+                : 'opacity-100 scale-100 animate-slideUp'
+            }`}
+          >
+            {activeTab === 'home' && currentUser?.role !== 'admin' && (
                 <HomeView
                   onOpenPortal={handleOpenPortal}
                   onOpenRates={() => handleTabChange('rates')}
@@ -226,7 +251,6 @@ export function App() {
 
               {activeTab === 'history' && <AdminHistory jobs={jobs} />}
             </div>
-          )}
         </main>
       </div>
 

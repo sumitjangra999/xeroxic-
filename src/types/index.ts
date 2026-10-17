@@ -31,7 +31,9 @@ export interface PrintJob {
   fileSize: string;
   fileType: string;
   fileUrl?: string;
-  paymentMethod?: 'upi' | 'counter';
+  paymentMethod?: 'razorpay' | 'upi' | 'counter';
+  razorpayPaymentId?: string;
+  paymentStatus?: 'paid' | 'pending';
   utrNumber?: string;
   pageCount: number;
   pageRange?: string;

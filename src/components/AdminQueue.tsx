@@ -610,8 +610,17 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
                     {/* Amount */}
                     <td className="py-3 px-4">
                       <div className="font-bold text-[#242424]">₹{job.cost}.00</div>
-                      <div className="text-[10px] text-[#797775] capitalize">
-                        {job.paymentMethod === 'upi' ? 'UPI Online' : 'Pay at Counter'}
+                      <div className="text-[10px] text-[#797775]">
+                        {job.paymentMethod === 'razorpay' ? (
+                          <span className="text-[#107c10] font-semibold flex items-center space-x-0.5">
+                            <ShieldCheck className="w-3 h-3 text-[#107c10]" />
+                            <span>Razorpay (Paid)</span>
+                          </span>
+                        ) : job.paymentMethod === 'upi' ? (
+                          'UPI Online'
+                        ) : (
+                          'Pay at Counter'
+                        )}
                       </div>
                     </td>
 
@@ -791,7 +800,13 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
                 <span>Size: {previewJob.paperSize}</span>
               </div>
               <div className="font-bold text-[#242424]">
-                Total: ₹{previewJob.cost}.00 ({previewJob.paymentMethod === 'upi' ? 'UPI' : 'Pay at Counter'})
+                Total: ₹{previewJob.cost}.00 (
+                {previewJob.paymentMethod === 'razorpay'
+                  ? 'Paid via Razorpay'
+                  : previewJob.paymentMethod === 'upi'
+                  ? 'UPI'
+                  : 'Pay at Counter'}
+                )
               </div>
             </div>
 
@@ -944,7 +959,13 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavig
                 </div>
                 <div className="p-2.5 border border-[#e1dfdd] rounded-lg col-span-2 sm:col-span-1">
                   <span className="text-[#605e5c] block">Payment:</span>
-                  <span className="font-semibold capitalize">{selectedJob.paymentMethod === 'upi' ? 'UPI Online' : 'Pay at Counter'}</span>
+                  <span className="font-semibold">
+                    {selectedJob.paymentMethod === 'razorpay'
+                      ? `Razorpay Paid (ID: ${selectedJob.razorpayPaymentId || 'Verified'})`
+                      : selectedJob.paymentMethod === 'upi'
+                      ? 'UPI Online'
+                      : 'Pay at Counter'}
+                  </span>
                 </div>
               </div>
 
