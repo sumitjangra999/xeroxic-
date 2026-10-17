@@ -6,8 +6,8 @@ import {
   registerStudentAccount,
   getRememberedLogin,
   saveRememberedLogin,
-  ADMIN_CREDENTIALS,
-  getRegisteredAccounts
+  getRegisteredAccounts,
+  getRegisteredAdmins
 } from '../services/storage';
 import { ArrowRight, ArrowLeft, CheckCircle2, ShieldCheck, UserCheck, AlertCircle } from 'lucide-react';
 
@@ -63,8 +63,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
 
     if (isAdminMode) {
       const lower = input.toLowerCase();
-      if (lower !== 'admin' && lower !== 'admin@college.edu' && lower !== 'admin@xeroxic.edu') {
-        setErrorMessage('Invalid admin username. Please enter "admin".');
+      const admins = getRegisteredAdmins();
+      const exists = admins.some(
+        (a) =>
+          a.username.toLowerCase() === lower ||
+          a.email.toLowerCase() === lower
+      );
+      if (!exists) {
+        setErrorMessage('No admin account found for this username or email.');
         return;
       }
       setStep('password');
@@ -292,7 +298,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
                   onClick={() => {
                     const nextMode = !isAdminMode;
                     setIsAdminMode(nextMode);
-                    setUsernameOrEmail(nextMode ? 'admin' : '');
+                    setUsernameOrEmail('');
                     setStep('username');
                     setErrorMessage('');
                     setSuccessMessage('');
@@ -303,19 +309,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
                 </button>
               </div>
 
-              {/* Preset credentials note */}
-              <div className="p-2.5 bg-[#f9fafb] border border-[#e5e7eb] rounded-md text-[11px] text-[#6b7280] space-y-1">
+              {/* Status and Sign Up switch */}
+              <div className="p-2.5 bg-[#f9fafb] border border-[#e5e7eb] rounded-md text-[11px] text-[#6b7280]">
                 {isAdminMode ? (
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 text-[#111827] font-medium">
                     <ShieldCheck className="w-3.5 h-3.5 text-[#0062e0] shrink-0" />
-                    <span>
-                      Fixed Admin: ID: <strong className="text-[#111827]">admin</strong> | Password: <strong className="text-[#111827]">admin@123</strong>
-                    </span>
+                    <span>Authorized Xerox Operator Access Portal</span>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between">
                     <span>
-                      Demo Student: <strong className="text-[#111827]">2024CS1092</strong> (Pass: <strong className="text-[#111827]">student123</strong>)
+                      Demo Student: <strong className="text-[#111827]">2024CS1092</strong>
                     </span>
                     <button
                       type="button"
@@ -325,7 +329,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
                       }}
                       className="text-[#0062e0] hover:underline font-semibold"
                     >
-                      New user? Sign Up
+                      New student? Sign Up
                     </button>
                   </div>
                 )}
@@ -367,12 +371,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
                   className="w-full px-3.5 py-2.5 text-sm border border-[#d1d5db] rounded-lg focus:outline-none focus:border-[#0062e0] focus:ring-1 focus:ring-[#0062e0] transition-colors"
                 />
               </div>
-
-              {isAdminMode && (
-                <div className="text-[11px] text-[#6b7280]">
-                  Admin Password: <code className="font-mono font-semibold bg-gray-100 px-1 py-0.5 rounded">admin@123</code>
-                </div>
-              )}
 
               <button
                 type="submit"

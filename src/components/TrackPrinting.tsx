@@ -38,10 +38,22 @@ export const TrackPrinting: React.FC<TrackPrintingProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [readyAlertMsg, setReadyAlertMsg] = useState<string | null>(null);
 
-  // Student should see their own jobs
-  const studentJobs = jobs.filter(
-    (j) => j.studentId === user.id || j.studentRoll === user.studentId
-  );
+  // Student should see their own jobs matching their ID, Roll number, or Email
+  const studentJobs = jobs.filter((j) => {
+    if (!user) return false;
+    const userRoll = (user.studentId || '').trim().toLowerCase();
+    const jobRoll = (j.studentRoll || '').trim().toLowerCase();
+    const userId = (user.id || '').trim().toLowerCase();
+    const jobStudentId = (j.studentId || '').trim().toLowerCase();
+    const userEmail = (user.email || '').trim().toLowerCase();
+
+    return (
+      (userRoll && jobRoll && userRoll === jobRoll) ||
+      (userId && jobStudentId && userId === jobStudentId) ||
+      (userRoll && jobStudentId && userRoll === jobStudentId) ||
+      (userEmail && jobRoll && userEmail === jobRoll)
+    );
+  });
 
   // Sound chime when operator marks an order as ready
   const knownReadyRef = useRef<Set<string>>(

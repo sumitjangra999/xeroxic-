@@ -27,134 +27,7 @@ export function generateOrderId(): string {
   return `${letter}${num}`;
 }
 
-const INITIAL_JOBS: PrintJob[] = [
-  {
-    id: 'A101',
-    studentId: 'usr-student-01',
-    studentName: 'Rohan Sharma',
-    studentRoll: '250222',
-    studentPhone: '+91 98765 43210',
-    department: 'Computer Science & Engineering',
-    fileName: 'DBMS_Lab_Assignment_3.pdf',
-    fileSize: '2.4 MB',
-    fileType: 'application/pdf',
-    pageCount: 14,
-    copies: 2,
-    colorMode: 'bw',
-    paperSize: 'A4',
-    paperType: 'plain',
-    orientation: 'portrait',
-    sides: 'double',
-    binding: 'staple',
-    isUrgent: false,
-    instructions: 'Please staple top-left corner neatly.',
-    cost: 42,
-    status: 'ready',
-    createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
-    pickupCounter: 'AIT Xerox Shop',
-    estimatedPickupTime: 'Ready for pickup',
-    statusHistory: [
-      { status: 'submitted', timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString() },
-      { status: 'processing', timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString(), note: 'Printing started' },
-      { status: 'ready', timestamp: new Date(Date.now() - 10 * 60 * 1000).toISOString(), note: 'Printed and stapled. Kept at AIT Xerox Shop.' }
-    ]
-  },
-  {
-    id: 'B204',
-    studentId: 'usr-student-01',
-    studentName: 'Rohan Sharma',
-    studentRoll: '250222',
-    studentPhone: '+91 98765 43210',
-    department: 'Computer Science & Engineering',
-    fileName: 'Project_Synopsis_Machine_Learning.pdf',
-    fileSize: '5.1 MB',
-    fileType: 'application/pdf',
-    pageCount: 28,
-    copies: 1,
-    colorMode: 'color',
-    paperSize: 'A4',
-    paperType: 'photo',
-    orientation: 'portrait',
-    sides: 'double',
-    binding: 'spiral',
-    isUrgent: true,
-    instructions: 'First page in color, rest in black & white. Spiral binding please.',
-    cost: 295,
-    status: 'processing',
-    createdAt: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-    pickupCounter: 'AIT Xerox Shop',
-    estimatedPickupTime: 'Within 15 minutes',
-    statusHistory: [
-      { status: 'submitted', timestamp: new Date(Date.now() - 20 * 60 * 1000).toISOString() },
-      { status: 'processing', timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(), note: 'Printing in progress' }
-    ]
-  },
-  {
-    id: 'C310',
-    studentId: 'usr-student-02',
-    studentName: 'Ananya Deshmukh',
-    studentRoll: '250225',
-    studentPhone: '+91 91234 56789',
-    department: 'Electrical Engineering',
-    fileName: 'Circuit_Simulation_Report.pdf',
-    fileSize: '3.8 MB',
-    fileType: 'application/pdf',
-    pageCount: 18,
-    copies: 1,
-    colorMode: 'bw',
-    paperSize: 'A4',
-    paperType: 'plain',
-    orientation: 'portrait',
-    sides: 'single',
-    binding: 'staple',
-    isUrgent: false,
-    instructions: 'Single sided please.',
-    cost: 36,
-    status: 'submitted',
-    createdAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    pickupCounter: 'AIT Xerox Shop',
-    estimatedPickupTime: '20-25 minutes',
-    statusHistory: [
-      { status: 'submitted', timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString() }
-    ]
-  },
-  {
-    id: 'D405',
-    studentId: 'usr-student-01',
-    studentName: 'Rohan Sharma',
-    studentRoll: '250222',
-    studentPhone: '+91 98765 43210',
-    department: 'Computer Science & Engineering',
-    fileName: 'Operating_Systems_Lecture_Notes_Unit1.pdf',
-    fileSize: '8.2 MB',
-    fileType: 'application/pdf',
-    pageCount: 42,
-    copies: 1,
-    colorMode: 'bw',
-    paperSize: 'A4',
-    paperType: 'plain',
-    orientation: 'portrait',
-    sides: 'double',
-    binding: 'spiral',
-    isUrgent: false,
-    instructions: '',
-    cost: 89,
-    status: 'completed',
-    createdAt: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    pickupCounter: 'AIT Xerox Shop',
-    estimatedPickupTime: 'Completed',
-    statusHistory: [
-      { status: 'submitted', timestamp: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString() },
-      { status: 'processing', timestamp: new Date(Date.now() - 25 * 60 * 1000).toISOString() },
-      { status: 'ready', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
-      { status: 'completed', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), note: 'Collected by student at AIT Xerox Shop' }
-    ]
-  }
-];
+const INITIAL_JOBS: PrintJob[] = [];
 
 import {
   fetchJobsFromSupabase,
@@ -165,7 +38,7 @@ import {
   deleteStorageFileFromSupabase,
 } from './supabase';
 
-const STORAGE_KEY_JOBS = 'xeroxic_jobs_v3';
+const STORAGE_KEY_JOBS = 'xeroxic_jobs_v5';
 const STORAGE_KEY_USER = 'xeroxic_active_user_v3';
 
 export function getStoredJobs(): PrintJob[] {
@@ -193,15 +66,7 @@ export function saveStoredJobs(jobs: PrintJob[]): void {
 export async function syncJobsFromSupabase(): Promise<PrintJob[]> {
   try {
     const remote = await fetchJobsFromSupabase();
-    if (remote && remote.length > 0) {
-      const local = getStoredJobs();
-      const remoteMap = new Map(remote.map((r) => [r.id, r]));
-      // Keep any local-only jobs that haven't synced yet
-      for (const loc of local) {
-        if (!remoteMap.has(loc.id)) {
-          remote.push(loc);
-        }
-      }
+    if (remote !== null) {
       saveStoredJobs(remote);
       return remote;
     }
@@ -354,28 +219,118 @@ export function verifyStudentLogin(
   return { success: true, user };
 }
 
+export interface AdminAccount {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  password: string;
+  createdAt: string;
+}
+
+const STORAGE_KEY_ADMIN_ACCOUNTS = 'xeroxic_admin_accounts_v1';
+
+const DEFAULT_ADMIN_ACCOUNTS: AdminAccount[] = [
+  {
+    id: 'admin-01',
+    name: 'AIT Xerox Operator',
+    username: 'admin',
+    email: 'admin@college.edu',
+    password: 'admin@123',
+    createdAt: new Date().toISOString(),
+  },
+];
+
+export function getRegisteredAdmins(): AdminAccount[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_ADMIN_ACCOUNTS);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEY_ADMIN_ACCOUNTS, JSON.stringify(DEFAULT_ADMIN_ACCOUNTS));
+      return DEFAULT_ADMIN_ACCOUNTS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_ADMIN_ACCOUNTS;
+  } catch {
+    return DEFAULT_ADMIN_ACCOUNTS;
+  }
+}
+
+export function registerAdminAccount(data: {
+  name: string;
+  username: string;
+  email?: string;
+  password: string;
+}): { success: boolean; message?: string; account?: AdminAccount } {
+  try {
+    const cleanUsername = data.username.trim().toLowerCase();
+    if (!cleanUsername) {
+      return { success: false, message: 'Admin username is required.' };
+    }
+    if (!data.password.trim() || data.password.trim().length < 4) {
+      return { success: false, message: 'Password must be at least 4 characters long.' };
+    }
+
+    const admins = getRegisteredAdmins();
+    const cleanEmail = (data.email || `${cleanUsername}@college.edu`).trim().toLowerCase();
+
+    if (admins.some((a) => a.username.toLowerCase() === cleanUsername)) {
+      return { success: false, message: `Admin with username "${cleanUsername}" already exists.` };
+    }
+
+    const newAdmin: AdminAccount = {
+      id: `admin-${Date.now()}`,
+      name: data.name.trim() || cleanUsername,
+      username: cleanUsername,
+      email: cleanEmail,
+      password: data.password.trim(),
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [...admins, newAdmin];
+    localStorage.setItem(STORAGE_KEY_ADMIN_ACCOUNTS, JSON.stringify(updated));
+    return { success: true, account: newAdmin };
+  } catch (e: any) {
+    return { success: false, message: e.message || 'Error creating admin account.' };
+  }
+}
+
 export function verifyAdminLogin(
   identifier: string,
   passwordInput: string
 ): { success: boolean; message?: string; user?: User } {
   const cleanId = identifier.trim().toLowerCase();
-  const validUsernames = ['admin', 'admin@college.edu', 'admin@xeroxic.edu'];
+  const admins = getRegisteredAdmins();
 
-  if (!validUsernames.includes(cleanId)) {
+  const matched = admins.find(
+    (a) =>
+      a.username.toLowerCase() === cleanId ||
+      a.email.toLowerCase() === cleanId
+  );
+
+  if (!matched) {
     return {
       success: false,
-      message: 'Invalid admin username or email. (Admin ID: admin)',
+      message: 'Invalid admin username or email.',
     };
   }
 
-  if (passwordInput.trim() !== ADMIN_CREDENTIALS.password) {
+  if (passwordInput.trim() !== matched.password) {
     return {
       success: false,
-      message: 'Incorrect admin password. (Hint: admin@123)',
+      message: 'Incorrect admin password.',
     };
   }
 
-  return { success: true, user: DEMO_ADMIN };
+  const user: User = {
+    id: matched.id,
+    name: matched.name,
+    email: matched.email,
+    role: 'admin',
+    department: 'AIT Xerox Counter',
+    phone: '+91 98765 00001',
+  };
+
+  return { success: true, user };
 }
 
 export function getRememberedLogin(): { identifier: string; isAdmin: boolean } | null {
@@ -482,24 +437,10 @@ export function updateJobStatus(jobId: string, newStatus: PrintJob['status'], no
   });
   saveStoredJobs(updated);
 
-  // Sync to Supabase in background
-  if (newStatus === 'completed') {
-    // Automatically purge printed & delivered job from Supabase database and storage
-    deleteJobFromSupabase(jobId).catch((err) =>
-      console.warn('Auto-delete from Supabase note:', err)
-    );
-  } else {
-    // Once printed (ready for pickup), remove the uploaded file from storage to protect privacy & space
-    if (newStatus === 'ready') {
-      deleteStorageFileFromSupabase(jobId).catch((err) =>
-        console.warn('Storage purge note:', err)
-      );
-    }
-
-    updateJobStatusInSupabase(jobId, newStatus).catch((err) =>
-      console.warn('Background Supabase update error:', err)
-    );
-  }
+  // Sync status to Supabase in background (never auto-delete, so student tracking and completed history stay intact)
+  updateJobStatusInSupabase(jobId, newStatus).catch((err) =>
+    console.warn('Background Supabase update error:', err)
+  );
 }
 
 // Manually delete a print job from local storage and Supabase database/storage

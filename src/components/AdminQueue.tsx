@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PrintJob, User } from '../types';
-import { updateJobStatus, deletePrintJob } from '../services/storage';
+import { updateJobStatus, deletePrintJob, getRegisteredAdmins, registerAdminAccount, AdminAccount } from '../services/storage';
 import { soundManager } from '../utils/audio';
 import {
   Printer,
@@ -20,7 +20,10 @@ import {
   Volume2,
   VolumeX,
   Bell,
-  FileText
+  FileText,
+  UserPlus,
+  ShieldCheck,
+  Shield
 } from 'lucide-react';
 
 interface AdminQueueProps {
@@ -37,6 +40,47 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
   const [actionSuccessMsg, setActionSuccessMsg] = useState('');
   const [newOrderAlert, setNewOrderAlert] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(soundManager.isEnabled());
+
+  // Add Admin modal state
+  const [showAddAdminModal, setShowAddAdminModal] = useState(false);
+  const [newAdminName, setNewAdminName] = useState('');
+  const [newAdminUsername, setNewAdminUsername] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [adminRegisterError, setAdminRegisterError] = useState('');
+  const [adminRegisterSuccess, setAdminRegisterSuccess] = useState('');
+  const [adminsList, setAdminsList] = useState<AdminAccount[]>(() => getRegisteredAdmins());
+
+  const handleRegisterNewAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminRegisterError('');
+    setAdminRegisterSuccess('');
+
+    if (!newAdminUsername.trim() || !newAdminPassword.trim()) {
+      setAdminRegisterError('Please enter both Admin Username/ID and Password.');
+      return;
+    }
+
+    const res = registerAdminAccount({
+      name: newAdminName.trim() || newAdminUsername.trim(),
+      username: newAdminUsername.trim(),
+      email: newAdminEmail.trim(),
+      password: newAdminPassword.trim(),
+    });
+
+    if (!res.success) {
+      setAdminRegisterError(res.message || 'Could not register admin.');
+      return;
+    }
+
+    const updated = getRegisteredAdmins();
+    setAdminsList(updated);
+    setAdminRegisterSuccess(`Admin account "${newAdminUsername.trim()}" created successfully!`);
+    setNewAdminName('');
+    setNewAdminUsername('');
+    setNewAdminEmail('');
+    setNewAdminPassword('');
+  };
 
   // Track known submitted job IDs to sound the bell when a new request arrives
   const knownSubmittedIdsRef = useRef<Set<string>>(
@@ -183,6 +227,20 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
             className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#8a8886] px-2.5 py-1.5 rounded-[2px] font-medium"
           >
             Test Bell
+          </button>
+
+          <button
+            onClick={() => {
+              setAdminsList(getRegisteredAdmins());
+              setShowAddAdminModal(true);
+              setAdminRegisterError('');
+              setAdminRegisterSuccess('');
+            }}
+            className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#0067b8]/40 px-3 py-1.5 rounded-[2px] font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+            title="Register a new counter operator / admin"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>+ Add Admin</span>
           </button>
 
           <button
@@ -870,6 +928,138 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add New Admin Modal */}
+      {showAddAdminModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-[4px] border border-[#8a8886] shadow-2xl max-w-lg w-full overflow-hidden animate-fadeIn">
+            <div className="p-4 bg-[#faf9f8] border-b border-[#edebe9] flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-[#e6f2fb] text-[#0067b8] flex items-center justify-center">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-[#242424]">Register New Admin / Operator</h3>
+                  <p className="text-[11px] text-[#605e5c]">Create credentials for counter staff</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAddAdminModal(false)}
+                className="text-[#605e5c] hover:text-[#242424] p-1 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRegisterNewAdmin} className="p-5 space-y-3.5 text-xs">
+              {adminRegisterError && (
+                <div className="p-2.5 bg-[#fde7e9] text-[#a80000] border border-[#f19999] rounded-[2px]">
+                  {adminRegisterError}
+                </div>
+              )}
+              {adminRegisterSuccess && (
+                <div className="p-2.5 bg-[#dff6dd] text-[#107c10] border border-[#a2e6a0] rounded-[2px] font-medium">
+                  {adminRegisterSuccess}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-semibold text-[#242424] mb-1">
+                  Full Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ramesh Kumar (Counter 2)"
+                  value={newAdminName}
+                  onChange={(e) => setNewAdminName(e.target.value)}
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#242424] mb-1">
+                  Admin Login ID / Username <span className="text-[#d83b01]">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. admin2 or operator_desk"
+                  value={newAdminUsername}
+                  onChange={(e) => setNewAdminUsername(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#242424] mb-1">
+                  Admin Email (Optional)
+                </label>
+                <input
+                  type="email"
+                  placeholder="e.g. admin2@college.edu"
+                  value={newAdminEmail}
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#242424] mb-1">
+                  Password <span className="text-[#d83b01]">*</span>
+                </label>
+                <input
+                  type="password"
+                  placeholder="Enter a secure password (min 4 characters)"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-[#8a8886] rounded-[2px] focus:outline-none focus:border-[#0067b8]"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddAdminModal(false)}
+                  className="px-3 py-2 border border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424] font-semibold rounded-[2px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-[#0067b8] hover:bg-[#005da6] text-white px-4 py-2 font-semibold rounded-[2px] shadow-sm flex items-center space-x-1.5"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>Create Admin Account</span>
+                </button>
+              </div>
+
+              {/* Active Admins List */}
+              <div className="mt-4 pt-3 border-t border-[#edebe9]">
+                <div className="text-[11px] font-semibold text-[#605e5c] uppercase mb-2">
+                  Active Registered Admins ({adminsList.length})
+                </div>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  {adminsList.map((a) => (
+                    <div
+                      key={a.id}
+                      className="p-2 bg-[#f3f2f1] rounded-[2px] flex items-center justify-between text-[11px]"
+                    >
+                      <div>
+                        <span className="font-semibold text-[#242424]">{a.name}</span>
+                        <span className="text-[#605e5c] ml-2 font-mono">({a.username})</span>
+                      </div>
+                      <span className="text-[#107c10] font-semibold text-[10px] bg-[#dff6dd] px-1.5 py-0.5 rounded border border-[#a2e6a0]">
+                        Active
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </form>
           </div>
         </div>
       )}
