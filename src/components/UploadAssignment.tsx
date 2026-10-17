@@ -154,9 +154,16 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
 
   // Price calculations - strictly 0 until files are uploaded and merged!
   const hasFile = fileList.length > 0 && Boolean(mergedFile);
-  const perPageRate = colorMode === 'color' ? 10 : 2;
   const paperMultiplier = paperSize === 'A3' ? 2 : 1;
-  const pagesCost = hasFile ? pageCount * copies * perPageRate * paperMultiplier : 0;
+  // Physical sheets of paper used: 2 pages fit on 1 sheet front-and-back when double-sided
+  const sheetsCount = hasFile ? (sides === 'double' ? Math.ceil(pageCount / 2) : pageCount) : 0;
+  // Rate per copy:
+  // - B&W: ₹2.00 per physical sheet (1 sheet holds 2 pages front & back for ₹2.00)
+  // - Color: ₹10.00 per single-sided page, ₹9.00 per side for double-sided
+  const printRatePerCopy = colorMode === 'color'
+    ? (sides === 'double' ? pageCount * 9 : pageCount * 10) * paperMultiplier
+    : (sides === 'double' ? Math.ceil(pageCount / 2) * 2 : pageCount * 2) * paperMultiplier;
+  const pagesCost = hasFile ? printRatePerCopy * copies : 0;
   const photoPaperFee = hasFile && paperType === 'photo' ? 15 * copies : 0;
   const urgentFee = hasFile && isUrgent ? 10 : 0;
   const totalCost = hasFile ? pagesCost + photoPaperFee + urgentFee : 0;
@@ -320,7 +327,6 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
     e.preventDefault();
     try {
       const sampleDoc = await PDFDocument.create();
-      sampleDoc.addPage([595.28, 841.89]);
       sampleDoc.addPage([595.28, 841.89]);
       const pdfBytes = await sampleDoc.save();
       const sample = new File([pdfBytes], 'Lab_Assignment_Unit_4.pdf', {
@@ -903,10 +909,15 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
 
                 <div className="space-y-2 text-xs py-2 border-b border-[#edebe9]">
                   <div className="flex justify-between text-[#605e5c]">
-                    <span>
-                      Printing ({pageCount} pgs × {copies} × ₹{perPageRate})
-                    </span>
-                    <span className="font-medium text-[#242424]">₹{pagesCost}.00</span>
+                    <div>
+                      <span className="font-medium text-[#242424]">
+                        Printing ({pageCount} {pageCount === 1 ? 'page' : 'pages'} • {sheetsCount} {sheetsCount === 1 ? 'sheet' : 'sheets'})
+                      </span>
+                      <span className="block text-[11px] text-[#605e5c]">
+                        {sides === 'double' ? 'Double Sided (Front & Back)' : 'Single Sided'} • {copies} {copies > 1 ? 'copies' : 'copy'}
+                      </span>
+                    </div>
+                    <span className="font-semibold text-[#242424]">₹{pagesCost}.00</span>
                   </div>
 
                   {photoPaperFee > 0 && (
@@ -1360,24 +1371,43 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
                     <button
                       type="button"
                       onClick={() => setSides('double')}
-                      className={`py-2 px-3 text-xs font-medium rounded border text-center transition-colors ${
+                      className={`p-2.5 rounded-lg border text-left transition-all ${
                         sides === 'double'
-                          ? 'border-[#0067b8] bg-[#0067b8] text-white'
-                          : 'border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424]'
+                          ? 'border-[#0067b8] bg-[#e6f2fb]/60 text-[#0067b8] ring-1 ring-[#0067b8]'
+                          : 'border-[#edebe9] hover:border-[#a19f9d] bg-white text-[#242424]'
                       }`}
                     >
-                      Double Sided (Duplex)
+                      <div className="font-semibold text-xs flex items-center justify-between">
+                        <span>Double Sided</span>
+                        {sides === 'double' && <Check className="w-3.5 h-3.5 text-[#0067b8]" />}
+                      </div>
+                      <div className="text-[11px] text-[#107c10] font-semibold mt-0.5">
+                        Front & Back (₹2 / sheet)
+                      </div>
+                      <div className="text-[10px] text-[#605e5c]">
+                        2 pages fit on 1 sheet for ₹2
+                      </div>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => setSides('single')}
-                      className={`py-2 px-3 text-xs font-medium rounded border text-center transition-colors ${
+                      className={`p-2.5 rounded-lg border text-left transition-all ${
                         sides === 'single'
-                          ? 'border-[#0067b8] bg-[#0067b8] text-white'
-                          : 'border-[#8a8886] hover:bg-[#f3f2f1] text-[#242424]'
+                          ? 'border-[#0067b8] bg-[#e6f2fb]/60 text-[#0067b8] ring-1 ring-[#0067b8]'
+                          : 'border-[#edebe9] hover:border-[#a19f9d] bg-white text-[#242424]'
                       }`}
                     >
-                      Single Sided
+                      <div className="font-semibold text-xs flex items-center justify-between">
+                        <span>Single Sided</span>
+                        {sides === 'single' && <Check className="w-3.5 h-3.5 text-[#0067b8]" />}
+                      </div>
+                      <div className="text-[11px] text-[#0067b8] font-semibold mt-0.5">
+                        Front Only (₹2 / page)
+                      </div>
+                      <div className="text-[10px] text-[#605e5c]">
+                        1 page per separate sheet
+                      </div>
                     </button>
                   </div>
                 </div>
@@ -1554,10 +1584,15 @@ export const UploadAssignment: React.FC<UploadAssignmentProps> = ({ user, onJobC
               ) : (
                 <>
                   <div className="flex justify-between text-[#605e5c]">
-                    <span>
-                      Printing ({pageCount} pgs × {copies} × ₹{perPageRate})
-                    </span>
-                    <span className="font-medium text-[#242424]">₹{pagesCost}.00</span>
+                    <div>
+                      <span className="font-medium text-[#242424]">
+                        Printing ({pageCount} {pageCount === 1 ? 'page' : 'pages'} • {sheetsCount} {sheetsCount === 1 ? 'sheet' : 'sheets'})
+                      </span>
+                      <span className="block text-[11px] text-[#605e5c]">
+                        {sides === 'double' ? 'Front & Back (Duplex)' : 'Single Sided'} ({copies} {copies > 1 ? 'copies' : 'copy'})
+                      </span>
+                    </div>
+                    <span className="font-semibold text-[#242424]">₹{pagesCost}.00</span>
                   </div>
 
                   {photoPaperFee > 0 && (

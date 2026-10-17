@@ -33,7 +33,7 @@ export const RateCard: React.FC = () => {
                 <td className="py-3 px-4 font-medium">Black & White</td>
                 <td className="py-3 px-4 text-[#605e5c]">A4 Standard</td>
                 <td className="py-3 px-4 font-semibold text-[#0067b8]">₹2.00 / page</td>
-                <td className="py-3 px-4 font-semibold text-[#107c10]">₹1.50 / side</td>
+                <td className="py-3 px-4 font-semibold text-[#107c10]">₹2.00 / sheet (Front & Back)</td>
                 <td className="py-3 px-4 text-[#797775]">Assignments, notes, reports</td>
               </tr>
               <tr className="hover:bg-[#f3f2f1]/50">
