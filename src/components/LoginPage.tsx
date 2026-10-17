@@ -7,7 +7,8 @@ import {
   getRememberedLogin,
   saveRememberedLogin,
   getRegisteredAccounts,
-  getRegisteredAdmins
+  getRegisteredAdmins,
+  syncRegisteredUsersFromSupabase
 } from '../services/storage';
 import { ArrowRight, ArrowLeft, CheckCircle2, ShieldCheck, UserCheck, AlertCircle } from 'lucide-react';
 
@@ -35,8 +36,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupDepartment, setSignupDepartment] = useState('Computer Science & Engineering');
 
-  // Load remembered credentials on mount
+  // Load remembered credentials and sync users from Supabase on mount
   useEffect(() => {
+    syncRegisteredUsersFromSupabase().catch(() => {});
     const remembered = getRememberedLogin();
     if (remembered && remembered.identifier) {
       setUsernameOrEmail(remembered.identifier);
@@ -80,16 +82,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onCancel }) => {
     // Student: Verify that the account actually exists in registered accounts!
     const accounts = getRegisteredAccounts();
     const cleanId = input.toLowerCase();
-    const exists = accounts.some(
+    const matched = accounts.find(
       (a) =>
         a.rollNumber.toLowerCase() === cleanId ||
         a.email.toLowerCase() === cleanId
     );
 
-    if (!exists) {
+    if (!matched) {
       setErrorMessage(
         `No registered account found for "${input}". You must create an account in the "Sign Up" tab first.`
       );
+      return;
+    }
+
+    if (matched.status === 'blocked') {
+      setErrorMessage('⛔ Your account has been BLOCKED by the administrator. Please visit the Xerox counter.');
+      return;
+    }
+
+    if (matched.status === 'disabled') {
+      setErrorMessage('⚠️ Your account has been DISABLED by the administrator. Contact Xerox counter to reactivate.');
       return;
     }
 

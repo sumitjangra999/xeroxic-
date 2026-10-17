@@ -61,6 +61,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                     Operator Counter Queue
                   </button>
                   <button
+                    onClick={() => onTabChange('users')}
+                    className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'users'
+                        ? 'border-[#0067b8] text-[#0067b8] font-semibold'
+                        : 'border-transparent text-[#605e5c] hover:text-[#242424] hover:border-[#a19f9d]'
+                    }`}
+                  >
+                    Registered Students
+                  </button>
+                  <button
                     onClick={() => onTabChange('rates')}
                     className={`px-3.5 py-5 text-sm font-medium border-b-2 transition-colors ${
                       activeTab === 'rates'
@@ -180,7 +190,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 activeTab === 'queue' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
               }`}
             >
-              Operator Counter Queue
+              Operator Queue
+            </button>
+            <button
+              onClick={() => onTabChange('users')}
+              className={`text-xs px-3 py-1.5 rounded-md font-semibold whitespace-nowrap transition-colors ${
+                activeTab === 'users' ? 'bg-[#0067b8] text-white shadow-sm' : 'text-[#605e5c]'
+              }`}
+            >
+              Students ({activeTab === 'users' ? '●' : ''})
             </button>
             <button
               onClick={() => onTabChange('rates')}

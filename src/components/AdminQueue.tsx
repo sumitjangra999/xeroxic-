@@ -23,18 +23,19 @@ import {
   FileText,
   UserPlus,
   ShieldCheck,
-  Shield,
   QrCode,
-  Sparkles
+  Sparkles,
+  Users
 } from 'lucide-react';
 
 interface AdminQueueProps {
   user: User;
   jobs: PrintJob[];
   onRefresh: () => void;
+  onNavigateToUsers?: () => void;
 }
 
-export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
+export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh, onNavigateToUsers }) => {
   const [filter, setFilter] = useState<'all' | 'submitted' | 'processing' | 'ready' | 'completed'>('submitted');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedJob, setSelectedJob] = useState<PrintJob | null>(null);
@@ -153,6 +154,15 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
     }
   };
 
+  const handleOpenPreview = (job: PrintJob) => {
+    if (job.status === 'submitted') {
+      handleUpdateStatus(job.id, 'processing', 'Printing in progress (Operator opened preview)');
+      setPreviewJob({ ...job, status: 'processing' });
+    } else {
+      setPreviewJob(job);
+    }
+  };
+
   const handleScanOrSubmitCode = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const code = scannerInput.trim().toUpperCase();
@@ -174,9 +184,9 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
       });
       setScannerInput('');
     } else if (foundJob.status === 'submitted') {
-      setPreviewJob(foundJob);
+      handleOpenPreview(foundJob);
       setScanFeedback({
-        message: `ℹ️ Order ${foundJob.id} is Queued. Opened for printing preview.`,
+        message: `ℹ️ Order ${foundJob.id} moved to Printing queue. Opened preview portal.`,
         type: 'info'
       });
       setScannerInput('');
@@ -215,6 +225,9 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
   // Direct In-Web Print Trigger
   const handleDirectWebPrint = () => {
     if (!previewJob) return;
+    if (previewJob.status === 'submitted') {
+      handleUpdateStatus(previewJob.id, 'processing', 'Printing in progress (Web print triggered)');
+    }
     try {
       const iframe = document.getElementById('admin-preview-iframe') as HTMLIFrameElement;
       if (iframe && iframe.contentWindow) {
@@ -277,6 +290,17 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
           >
             Test Bell
           </button>
+
+          {onNavigateToUsers && (
+            <button
+              onClick={onNavigateToUsers}
+              className="text-xs bg-white hover:bg-[#f3f2f1] text-[#0067b8] border border-[#0067b8]/40 px-3.5 py-2 rounded-lg font-semibold flex items-center space-x-1.5 transition-colors shadow-sm"
+              title="Manage registered students, view records, disable/block accounts"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Student Records</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
@@ -530,7 +554,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                         </span>
                         {/* Preview icon button */}
                         <button
-                          onClick={() => setPreviewJob(job)}
+                          onClick={() => handleOpenPreview(job)}
                           className="text-[#0067b8] hover:bg-[#e6f2fb] p-1 rounded transition-colors"
                           title="Open In-Web Document Preview & Print Portal"
                         >
@@ -624,7 +648,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                       <div className="flex items-center justify-end space-x-1.5">
                         {/* Direct Preview & Print Portal Button */}
                         <button
-                          onClick={() => setPreviewJob(job)}
+                          onClick={() => handleOpenPreview(job)}
                           className="bg-[#f3f2f1] hover:bg-[#edebe9] text-[#242424] border border-[#8a8886] px-2.5 py-1.5 rounded-lg font-semibold text-xs flex items-center space-x-1 transition-colors shadow-sm"
                           title="Open Web Print Preview & Direct Print"
                         >
@@ -933,7 +957,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => {
-                        setPreviewJob(selectedJob);
+                        handleOpenPreview(selectedJob);
                         setSelectedJob(null);
                       }}
                       className="inline-flex items-center space-x-1 px-3 py-1.5 bg-[#0067b8] hover:bg-[#005da6] text-white text-xs font-semibold rounded-lg shadow-sm transition-colors"
@@ -977,7 +1001,7 @@ export const AdminQueue: React.FC<AdminQueueProps> = ({ jobs, onRefresh }) => {
             <div className="pt-3 border-t border-[#edebe9] flex items-center justify-end space-x-2">
               <button
                 onClick={() => {
-                  setPreviewJob(selectedJob);
+                  handleOpenPreview(selectedJob);
                   setSelectedJob(null);
                 }}
                 className="bg-[#0067b8] hover:bg-[#005da6] text-white px-3.5 py-2 rounded-lg font-semibold text-xs transition-colors flex items-center space-x-1.5 shadow-sm"

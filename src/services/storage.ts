@@ -95,6 +95,9 @@ export async function syncJobsFromSupabase(): Promise<PrintJob[]> {
 
 const STORAGE_KEY_REGISTERED_USERS = 'xeroxic_registered_accounts_v1';
 const STORAGE_KEY_REMEMBERED_LOGIN = 'xeroxic_remembered_login_v1';
+const SYSTEM_USERS_FILE = 'system_records/_xeroxic_registered_users.json';
+
+import { supabase } from './supabase';
 
 export interface RegisteredAccount {
   id: string;
@@ -104,6 +107,7 @@ export interface RegisteredAccount {
   phone?: string;
   department?: string;
   password: string;
+  status: 'active' | 'disabled' | 'blocked';
   createdAt: string;
 }
 
@@ -122,6 +126,7 @@ const DEFAULT_ACCOUNTS: RegisteredAccount[] = [
     phone: '+91 98765 43210',
     department: 'Computer Science & Engineering',
     password: 'student123',
+    status: 'active',
     createdAt: new Date().toISOString(),
   },
   {
@@ -132,6 +137,7 @@ const DEFAULT_ACCOUNTS: RegisteredAccount[] = [
     phone: '+91 98765 00000',
     department: 'Computer Science & Engineering',
     password: 'student123',
+    status: 'active',
     createdAt: new Date().toISOString(),
   },
 ];
@@ -148,14 +154,87 @@ export function getRegisteredAccounts(): RegisteredAccount[] {
       localStorage.setItem(STORAGE_KEY_REGISTERED_USERS, JSON.stringify(DEFAULT_ACCOUNTS));
       return DEFAULT_ACCOUNTS;
     }
-    return parsed;
+    // Ensure all accounts have a status
+    return parsed.map((a: any) => ({
+      ...a,
+      status: a.status || 'active',
+    }));
   } catch {
     return DEFAULT_ACCOUNTS;
   }
 }
 
+export async function syncRegisteredUsersFromSupabase(): Promise<RegisteredAccount[]> {
+  try {
+    const { data, error } = await supabase.storage.from('assignment').download(SYSTEM_USERS_FILE);
+    if (!error && data) {
+      const text = await data.text();
+      const remoteUsers: RegisteredAccount[] = JSON.parse(text);
+      if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+        const local = getRegisteredAccounts();
+        const mergedMap = new Map<string, RegisteredAccount>();
+        local.forEach((u) => mergedMap.set(u.id, u));
+        remoteUsers.forEach((u) => mergedMap.set(u.id, { ...u, status: u.status || 'active' }));
+        const merged = Array.from(mergedMap.values());
+        localStorage.setItem(STORAGE_KEY_REGISTERED_USERS, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent('xeroxic_users_updated', { detail: merged }));
+        return merged;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not sync users from Supabase storage:', err);
+  }
+  return getRegisteredAccounts();
+}
+
+export async function uploadUsersToSupabase(accounts: RegisteredAccount[]): Promise<boolean> {
+  try {
+    const blob = new Blob([JSON.stringify(accounts, null, 2)], { type: 'application/json' });
+    const { error } = await supabase.storage
+      .from('assignment')
+      .upload(SYSTEM_USERS_FILE, blob, { upsert: true });
+    if (error) {
+      console.warn('Error uploading users to Supabase storage:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error saving users to Supabase storage:', err);
+    return false;
+  }
+}
+
+export function saveRegisteredAccounts(accounts: RegisteredAccount[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_REGISTERED_USERS, JSON.stringify(accounts));
+    window.dispatchEvent(new CustomEvent('xeroxic_users_updated', { detail: accounts }));
+    uploadUsersToSupabase(accounts).catch((e) =>
+      console.warn('Background user upload error:', e)
+    );
+  } catch (e) {
+    console.error('Error saving registered accounts:', e);
+  }
+}
+
+export function updateUserStatus(
+  userId: string,
+  newStatus: 'active' | 'disabled' | 'blocked'
+): boolean {
+  const accounts = getRegisteredAccounts();
+  const updated = accounts.map((a) => (a.id === userId ? { ...a, status: newStatus } : a));
+  saveRegisteredAccounts(updated);
+  return true;
+}
+
+export function deleteUserAccount(userId: string): boolean {
+  const accounts = getRegisteredAccounts();
+  const updated = accounts.filter((a) => a.id !== userId);
+  saveRegisteredAccounts(updated);
+  return true;
+}
+
 export function registerStudentAccount(
-  data: Omit<RegisteredAccount, 'id' | 'createdAt'>
+  data: Omit<RegisteredAccount, 'id' | 'createdAt' | 'status'>
 ): { success: boolean; message?: string; account?: RegisteredAccount } {
   try {
     const accounts = getRegisteredAccounts();
@@ -184,11 +263,12 @@ export function registerStudentAccount(
       phone: data.phone?.trim() || '+91 98765 43210',
       department: data.department?.trim() || 'Campus Student',
       password: data.password.trim(),
+      status: 'active',
       createdAt: new Date().toISOString(),
     };
 
     const updated = [newAccount, ...accounts];
-    localStorage.setItem(STORAGE_KEY_REGISTERED_USERS, JSON.stringify(updated));
+    saveRegisteredAccounts(updated);
     return { success: true, account: newAccount };
   } catch (e: any) {
     return { success: false, message: e.message || 'Error creating account.' };
@@ -215,6 +295,21 @@ export function verifyStudentLogin(
     };
   }
 
+  // Enforce account status check
+  if (matched.status === 'blocked') {
+    return {
+      success: false,
+      message: '⛔ This account has been BLOCKED by the administrator. Please visit the Xerox counter.',
+    };
+  }
+
+  if (matched.status === 'disabled') {
+    return {
+      success: false,
+      message: '⚠️ This account has been DISABLED by the administrator. Contact Xerox counter to reactivate.',
+    };
+  }
+
   if (matched.password !== passwordInput.trim()) {
     return {
       success: false,
@@ -231,6 +326,7 @@ export function verifyStudentLogin(
     department: matched.department,
     phone: matched.phone,
     balance: 350,
+    status: matched.status || 'active',
   };
 
   return { success: true, user };

@@ -5,6 +5,7 @@ import {
   saveStoredUser,
   getStoredJobs,
   syncJobsFromSupabase,
+  syncRegisteredUsersFromSupabase,
   DEMO_STUDENT,
 } from './services/storage';
 import { subscribeToLiveJobs } from './services/supabase';
@@ -16,6 +17,7 @@ import { TrackPrinting } from './components/TrackPrinting';
 import { RateCard } from './components/RateCard';
 import { AdminQueue } from './components/AdminQueue';
 import { AdminHistory } from './components/AdminHistory';
+import { AdminUsers } from './components/AdminUsers';
 
 export function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(() => getStoredUser());
@@ -40,6 +42,7 @@ export function App() {
         if (latest && latest.length > 0) {
           setJobs(latest);
         }
+        await syncRegisteredUsersFromSupabase();
       } catch (err) {
         console.warn('Sync error:', err);
       }
@@ -210,6 +213,14 @@ export function App() {
                   user={currentUser || DEMO_STUDENT}
                   jobs={jobs}
                   onRefresh={handleRefreshJobs}
+                  onNavigateToUsers={() => handleTabChange('users')}
+                />
+              )}
+
+              {activeTab === 'users' && (
+                <AdminUsers
+                  user={currentUser || DEMO_STUDENT}
+                  jobs={jobs}
                 />
               )}
 

@@ -9,6 +9,7 @@ export interface User {
   department?: string;
   phone?: string;
   balance?: number;
+  status?: 'active' | 'disabled' | 'blocked';
 }
 
 export type JobStatus = 'submitted' | 'processing' | 'ready' | 'completed' | 'cancelled';
